@@ -86,6 +86,8 @@ footer a:hover {
   footer {
     grid-template-columns: 1fr 1fr;
     gap: 2.5rem;
+    /* Clears the fixed order bar, which starts at this width. */
+    padding-bottom: calc(3rem + 62px);
   }
 }
 
@@ -103,8 +105,6 @@ footer a:hover {
   footer {
     grid-template-columns: 1fr;
     gap: 2rem;
-    /* Clears the fixed order bar, which only exists at this width. */
-    padding-bottom: calc(3rem + 62px);
   }
 
   /* These sit in a column 0.55rem apart, so the hit area is grown with padding

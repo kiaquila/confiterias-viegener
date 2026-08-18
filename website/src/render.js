@@ -12,8 +12,16 @@ import {
   images,
   links,
   locations,
-  mapsSearch
+  mapsSearch,
+  unverifiedSections
 } from "./content.js";
+
+/* While any block is still an unapproved draft, the page must not be indexed.
+   It carries a real business's name, addresses and phone numbers that nobody
+   at that business has confirmed, so a search result pointing at it would put
+   unverified contact details in front of their customers. The tag comes off
+   with the last `unverified` flag, not by hand. */
+const isUnapproved = unverifiedSections.length > 0;
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -324,13 +332,10 @@ export function renderPage(origin) {
   <meta property="og:title" content="${escapeHtml(meta.title)}">
   <meta property="og:description" content="${escapeHtml(meta.description)}">
   <meta property="og:url" content="${origin}/">
-  <meta property="og:image" content="${origin}/assets/og.jpg">
-  <meta property="og:image:alt" content="${escapeHtml(meta.ogAlt)}">
   <meta property="og:locale" content="es_AR">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="theme-color" content="#253f33">
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <meta name="theme-color" content="#253f33">${
+    isUnapproved ? '\n  <meta name="robots" content="noindex, nofollow">' : ""
+  }
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
@@ -366,7 +371,6 @@ export function renderNotFound() {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Página no encontrada | ${escapeHtml(business.name)}</title>
   <meta name="robots" content="noindex">
-  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body class="error-page">

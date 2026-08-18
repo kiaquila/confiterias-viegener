@@ -350,9 +350,40 @@ test("the page works with the script blocked", () => {
 test("search engines and social cards get the page's own words", () => {
   assert.ok(page.includes(`<title>${content.meta.title}</title>`));
   assert.ok(page.includes(`content="${content.meta.description}"`));
-  assert.match(page, /property="og:image"/);
   assert.match(page, /property="og:locale" content="es_AR"/);
   assert.match(page, /rel="canonical"/);
+});
+
+test("an unapproved concept is not offered to search engines", async () => {
+  /* The page carries a real business's name, addresses and phone numbers that
+     nobody at that business has confirmed. Until they do, it must not be
+     indexable, and it must not advertise itself in a sitemap. */
+  const unapproved = unverifiedSections.length > 0;
+  const robots = await readFile(join(dist, "robots.txt"), "utf8");
+  if (unapproved) {
+    assert.match(page, /<meta name="robots" content="noindex, nofollow">/);
+    assert.match(robots, /^User-agent: \*\nDisallow: \/\n$/);
+    await assert.rejects(
+      () => stat(join(dist, "sitemap.xml")),
+      "an unapproved concept must not ship a sitemap"
+    );
+  } else {
+    assert.ok(!page.includes('name="robots"'));
+    assert.match(robots, /Allow: \//);
+  }
+});
+
+test("the build ships every local file the pages reference", async () => {
+  /* The document head once pointed at a favicon, a touch icon and an OG image
+     that were never built; the image slot check could not see them because
+     they are not slots. */
+  const references = [...page.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
+  const local = references.filter((url) => !/^(?:https?:|mailto:|tel:|#|data:)/.test(url));
+  assert.ok(local.length > 0);
+  for (const url of local) {
+    const info = await stat(join(dist, url.replace(/^\//, "").split(/[?#]/)[0]));
+    assert.ok(info.isFile(), `referenced but not shipped: ${url}`);
+  }
 });
 
 test("the 404 page keeps the visitor inside the site", () => {

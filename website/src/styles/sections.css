@@ -682,6 +682,28 @@
     grid-template-columns: 1fr auto;
   }
 
+  /* The bar appears at the width the nav disappears, not 320px later. The
+     header is absolutely positioned, so once the hero scrolls away the order
+     button goes with it: between 760 and 1080 there was no persistent way to
+     reach the order section at all. */
+  .mobile-order {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 62px;
+    padding: 0 1.35rem;
+    background: var(--gold-light);
+    color: var(--ink);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: 0 -8px 30px #00000029;
+  }
+
   .site-header nav,
   .hero-proof {
     display: none;
@@ -915,21 +937,4 @@
     inset: -0.7rem -0.35rem;
   }
 
-  .mobile-order {
-    position: fixed;
-    inset: auto 0 0 0;
-    z-index: 50;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 62px;
-    padding: 0 1.35rem;
-    background: var(--gold-light);
-    color: var(--ink);
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    box-shadow: 0 -8px 30px #00000029;
-  }
 }

@@ -65,6 +65,12 @@ on every build so an unapproved claim cannot quietly reach a stage.
    article rather than on the client.
 5. **`Especialidades judías`** appears in the "También hacemos" line. Confirm
    with the business how they describe this range before it is published.
+6. **No favicon, touch icon or social share image.** The concept referenced
+   none, and the port will not invent brand assets. Producing them means
+   deriving marks from the business's own identity, which is blocked on the
+   same permission question as everything else. The build fails if the document
+   ever references a file that is not shipped, so these cannot be added as
+   broken links by accident.
 
 ## Implementation
 
@@ -130,6 +136,14 @@ departures, each fixing a defect in the prototype:
 9. **The heading levels and the hero statistics** were made a real description
    list (`dl`), and decorative arrows are `aria-hidden`.
 10. **A 404 page** was added; the concept had none.
+11. **The page is `noindex, nofollow` and its `robots.txt` disallows
+    everything**, because it carries a real business's name and unconfirmed
+    phone numbers. Both are tied to the `unverified` flags in `content.js` and
+    lift automatically when the last one is cleared — not by hand.
+12. **The fixed order bar now appears at 1080px**, the width at which the
+    header nav disappears, rather than 320px later. The header is absolutely
+    positioned, so between 760 and 1080 the order button scrolled away with the
+    hero and left no persistent way to reach the order section.
 
 ## Known limitations
 

@@ -75,6 +75,48 @@ async function copyAssets() {
   });
 }
 
+/** Every local file the built pages point at has to exist in dist/.
+ *
+ *  `checkImageAssets` only knows about the slots declared in `images`, so it
+ *  could not see a favicon, a touch icon or an OG image referenced straight
+ *  from the document head — three of those shipped as 404s, and the OG one
+ *  would have broken every link preview. This reads the rendered HTML instead,
+ *  so it covers any reference however it got there. */
+async function checkRenderedAssets() {
+  const missing = new Set();
+  for (const page of ["index.html", "404.html"]) {
+    const html = await readFile(join(dist, page), "utf8");
+    const references = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
+    /* `content` is only a URL on the social-image tags; on every other meta it
+       is prose, which is why this is not matched attribute-wide. */
+    for (const [tag] of html.matchAll(/<meta[^>]+>/g)) {
+      if (!/(?:property|name)="[^"]*image[^"]*"/.test(tag)) continue;
+      const value = tag.match(/content="([^"]+)"/);
+      if (value) references.push(value[1]);
+    }
+    for (const url of references) {
+      if (/^(?:https?:|mailto:|tel:|#|data:)/.test(url)) continue;
+      const path = url.replace(/^\//, "").split(/[?#]/)[0];
+      if (!path) continue;
+      if (!existsSync(join(dist, path))) missing.add(`${page} → ${url}`);
+    }
+    for (const [, url] of html.matchAll(/srcset="([^"]+)"/g)) {
+      for (const candidate of url.split(",")) {
+        const path = candidate.trim().split(/\s+/)[0];
+        if (path && !existsSync(join(dist, path.replace(/^\//, "")))) {
+          missing.add(`${page} → ${path}`);
+        }
+      }
+    }
+  }
+  if (missing.size > 0) {
+    throw new Error(
+      `The build references files it does not ship (${missing.size}):\n  ` +
+        [...missing].join("\n  ")
+    );
+  }
+}
+
 /** Names the blocks whose factual content the client has not confirmed, so an
  *  unapproved claim cannot quietly reach a customer-facing stage unnoticed. */
 function reportUnverified() {
@@ -104,19 +146,29 @@ async function main() {
     }
   }
 
-  await writeFile(
-    join(dist, "robots.txt"),
-    `User-agent: *\nAllow: /\nSitemap: ${ORIGIN}/sitemap.xml\n`,
-    "utf8"
-  );
-  await writeFile(
-    join(dist, "sitemap.xml"),
-    '<?xml version="1.0" encoding="UTF-8"?>\n' +
-      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-      `  <url><loc>${ORIGIN}/</loc></url>\n` +
-      "</urlset>\n",
-    "utf8"
-  );
+  /* An unapproved concept is not offered to crawlers at all, and it ships no
+     sitemap inviting them in: the page carries a real business's name and
+     unconfirmed phone numbers. Both flip together with the last `unverified`
+     flag in content.js. */
+  if (unverifiedSections.length > 0) {
+    await writeFile(join(dist, "robots.txt"), "User-agent: *\nDisallow: /\n", "utf8");
+  } else {
+    await writeFile(
+      join(dist, "robots.txt"),
+      `User-agent: *\nAllow: /\nSitemap: ${ORIGIN}/sitemap.xml\n`,
+      "utf8"
+    );
+    await writeFile(
+      join(dist, "sitemap.xml"),
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+        `  <url><loc>${ORIGIN}/</loc></url>\n` +
+        "</urlset>\n",
+      "utf8"
+    );
+  }
+
+  await checkRenderedAssets();
 
   console.log("Built the Confiterías Viegener landing into dist/.");
   reportUnverified();
