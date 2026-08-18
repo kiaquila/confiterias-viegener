@@ -1,0 +1,121 @@
+/* The frame every section sits in. */
+
+.section-pad {
+  padding: 8.5rem var(--gutter);
+}
+
+.section-heading {
+  display: grid;
+  grid-template-columns: 1.15fr 0.6fr;
+  align-items: end;
+  gap: 8vw;
+  max-width: var(--measure-narrow);
+  margin: 0 auto 4rem;
+}
+
+.section-heading h2 {
+  max-width: 700px;
+}
+
+.section-heading > p {
+  color: var(--ink-soft);
+  margin-bottom: 0.6rem;
+  font-size: 0.96rem;
+}
+
+footer {
+  display: grid;
+  grid-template-columns: 1.6fr 0.9fr 0.7fr;
+  gap: 4rem;
+  background: var(--paper);
+  padding: 5.5rem var(--gutter) 3rem;
+}
+
+footer > div:not(.footer-brand) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.78rem;
+}
+
+footer > div:not(.footer-brand) span {
+  color: var(--gold);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  margin-bottom: 0.35rem;
+}
+
+footer a:hover {
+  color: var(--gold);
+}
+
+.footer-brand .brand-mark {
+  width: 210px;
+  margin-bottom: 1.5rem;
+  color: var(--ink);
+}
+
+.footer-brand p {
+  max-width: 300px;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  margin-bottom: 0;
+}
+
+.copyright {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  margin: 2rem 0 0;
+  padding-top: 1.5rem;
+  font-size: 0.68rem;
+}
+
+@media (width <= 1080px) {
+  .section-pad {
+    padding: 7rem var(--gutter);
+  }
+
+  footer {
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+  }
+}
+
+@media (width <= 760px) {
+  .section-pad {
+    padding: 6rem 1.25rem;
+  }
+
+  .section-heading {
+    grid-template-columns: 1fr;
+    gap: 1.4rem;
+    margin-bottom: 2.5rem;
+  }
+
+  footer {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    /* Clears the fixed order bar, which only exists at this width. */
+    padding-bottom: calc(3rem + 62px);
+  }
+
+  /* These sit in a column 0.55rem apart, so the hit area is grown with padding
+     rather than an overlay: overlapping targets in a list send a near-miss tap
+     to the neighbouring link. The gap shrinks by what the padding adds, so the
+     spacing a reader sees is unchanged. */
+  footer > div:not(.footer-brand) {
+    gap: 0;
+  }
+
+  footer > div:not(.footer-brand) a {
+    padding-block: 0.5rem;
+  }
+
+  .copyright {
+    grid-column: auto;
+  }
+}

@@ -1,0 +1,34 @@
+/* Design tokens carried over from the approved concept.
+
+   The palette is warm paper and ink with a gold accent and a single deep
+   forest used for the two inverted bands (the top note and catering). */
+
+:root {
+  --ink: #25211d;
+  --ink-soft: #645c53;
+  --cream: #f5efe5;
+  --paper: #fbf8f2;
+  --white: #fffdf9;
+  --gold: #bb8a43;
+  --gold-light: #e2c58d;
+  --forest: #253f33;
+  --line: #25211d2e;
+
+  /* On white, --gold clears 4.5:1 for body text; --gold-light does not, so it
+     is only ever used on the dark bands where it is the light colour. */
+  --on-dark: #fffdf9;
+  --on-dark-soft: #ffffffc2;
+  --on-dark-faint: #ffffff85;
+  --rule-dark: #ffffff40;
+
+  --display: "Iowan Old Style", "Palatino Linotype", Palatino, Baskerville,
+    "Times New Roman", serif;
+  --sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+  --gutter: max(5vw, 1.25rem);
+  --measure: 1500px;
+  --measure-narrow: 1380px;
+
+  --step: 0.18s;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}

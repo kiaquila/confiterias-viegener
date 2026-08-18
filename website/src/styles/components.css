@@ -1,0 +1,110 @@
+/* Pieces that appear in more than one section. */
+
+.eyebrow {
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  margin-bottom: 1.2rem;
+}
+
+.eyebrow.light {
+  color: var(--gold-light);
+}
+
+/* --- buttons -------------------------------------------------------------- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50px;
+  padding: 0.85rem 1.55rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  line-height: 1.2;
+  text-align: center;
+  text-transform: uppercase;
+  transition:
+    background var(--step),
+    color var(--step),
+    border-color var(--step),
+    transform var(--step);
+}
+
+.button:hover {
+  transform: translateY(-2px);
+}
+
+.button-small {
+  border: 1px solid #ffffffa6;
+  min-height: 42px;
+  padding: 0.7rem 1.1rem;
+}
+
+.button-small:hover,
+.button-light {
+  background: var(--white);
+  color: var(--ink);
+}
+
+.button-light:hover {
+  background: var(--gold-light);
+}
+
+.button-dark {
+  background: var(--ink);
+  color: var(--white);
+}
+
+.button-dark:hover {
+  background: var(--forest);
+}
+
+.button-gold {
+  background: var(--gold-light);
+  color: var(--ink);
+}
+
+.button-gold:hover {
+  background: var(--white);
+}
+
+.button-outline {
+  border: 1px solid var(--ink);
+}
+
+.button-outline:hover {
+  background: var(--ink);
+  color: var(--white);
+}
+
+/* --- text links ----------------------------------------------------------- */
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-bottom: 1px solid;
+  padding-bottom: 0.15rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.text-link span {
+  transition: transform var(--step);
+}
+
+.text-link:hover span {
+  transform: translate(2px, -2px);
+}
+
+.light-link {
+  color: var(--white);
+}
