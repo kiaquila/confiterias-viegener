@@ -354,7 +354,10 @@ ${renderFooter()}
 `;
 }
 
-export function renderNotFound(origin) {
+/* No `origin` argument: the 404 is served by whichever host answered the
+   request, so its way back has to be a same-origin path. Baking the canonical
+   origin in sent a visitor on a preview or a local build to a different site. */
+export function renderNotFound() {
   const { meta } = content;
   return `<!doctype html>
 <html lang="${meta.lang}">
@@ -371,7 +374,7 @@ export function renderNotFound(origin) {
     <p class="eyebrow">Error 404</p>
     <h1>Esta página no existe.</h1>
     <p>Puede que el enlace haya cambiado. Volvé al inicio para encontrar lo que buscabas.</p>
-    <a class="button button-dark" href="${origin}/">Ir al inicio</a>
+    <a class="button button-dark" href="/">Ir al inicio</a>
   </main>
 </body>
 </html>

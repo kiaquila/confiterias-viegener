@@ -77,16 +77,26 @@ address {
   font-style: normal;
 }
 
+/* The ring is a non-text indicator, so it has to clear 3:1 against whatever it
+   sits on. `--gold` reaches that on no light ground in this palette — 2.90:1 on
+   --paper, 2.69:1 on --cream, and 1.85:1 on the --gold-light order band, where
+   the two phone buttons and the email link live. Light grounds therefore take
+   --ink (15.08:1 on --paper, 9.59:1 on --gold-light). */
 :focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
 
-/* The dark bands need the focus ring in the light colour to stay visible. */
+/* The dark bands need the ring in the light colour to stay visible. The header
+   and the skip link are listed too: they are not inside .hero, but they are
+   painted over the hero photo and over --ink respectively, where an --ink ring
+   would disappear. */
+.top-note :focus-visible,
+.site-header :focus-visible,
+.skip-link:focus-visible,
 .hero :focus-visible,
 .catering :focus-visible,
-.locations :focus-visible,
-.top-note :focus-visible {
+.locations :focus-visible {
   outline-color: var(--gold-light);
 }
 

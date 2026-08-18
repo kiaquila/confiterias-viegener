@@ -357,5 +357,11 @@ test("search engines and social cards get the page's own words", () => {
 
 test("the 404 page keeps the visitor inside the site", () => {
   assert.match(notFound, /name="robots" content="noindex"/);
-  assert.match(notFound, /class="button button-dark" href="[^"]+\/"/);
+  /* Same-origin, so the way back works on a preview and on a local build and
+     not only on whichever host `origin` happens to name. */
+  assert.match(notFound, /class="button button-dark" href="\/"/);
+  assert.ok(
+    !notFound.includes(origin),
+    "the 404 must not send the visitor to a different host than the one that served it"
+  );
 });

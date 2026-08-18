@@ -4,12 +4,16 @@
   padding: 8.5rem var(--gutter);
 }
 
+/* Shares --measure with the card grid and the menu line it introduces. On
+   --measure-narrow it was capped 60px narrower than its own content once the
+   viewport passed ~1533px, so at 1920 the heading started at x=270 while its
+   cards started at x=210. */
 .section-heading {
   display: grid;
   grid-template-columns: 1.15fr 0.6fr;
   align-items: end;
   gap: 8vw;
-  max-width: var(--measure-narrow);
+  max-width: var(--measure);
   margin: 0 auto 4rem;
 }
 

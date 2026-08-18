@@ -20,6 +20,12 @@
 
 .top-note a {
   border-bottom: 1px solid #ffffff73;
+  transition: color var(--step), border-color var(--step);
+}
+
+.top-note a:hover {
+  color: var(--gold-light);
+  border-bottom-color: var(--gold-light);
 }
 
 .top-note-separator {
@@ -54,8 +60,19 @@
   width: 100%;
   aspect-ratio: 378 / 74;
   background: currentColor;
-  -webkit-mask: url("brand-logo.png") no-repeat center / contain;
-  mask: url("brand-logo.png") no-repeat center / contain;
+  /* Longhands rather than the `-webkit-mask` shorthand: WebKit did not accept
+     the `position / size` component in the prefixed shorthand, and a dropped
+     mask leaves `background: currentColor` painting a solid ink bar where the
+     wordmark should be. The longhands parse independently, so a partial
+     failure still masks. */
+  -webkit-mask-image: url("brand-logo.png");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+  mask-image: url("brand-logo.png");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
 }
 
 .site-header nav {
@@ -110,14 +127,22 @@
   height: 100%;
 }
 
-.hero-image img,
+/* `.hero-image` is the <img> itself — the class is set on the image, not on
+   the <picture> around it — so a descendant `img` selector matches nothing. */
 .hero-image {
   object-fit: cover;
   object-position: 50% 45%;
 }
 
+/* Three layers. The 90deg one is the editorial gradient the concept uses to
+   seat the hero copy on the left; it decays to 12% by 78%, and the vertical one
+   only starts at 45%. That leaves the top-right corner — where the nav, the
+   order button and the wordmark sit — almost unshaded: over a light photo the
+   last nav link measured 1.98:1 and the order button 1.27:1. The third layer is
+   a short top band that shades the header row without touching the h1. */
 .hero-shade {
   background:
+    linear-gradient(#0f120ec7 0%, #0f120e6b 8%, #0000 18%),
     linear-gradient(90deg, #11140fd4 0%, #11140f7a 46%, #11140f1f 78%),
     linear-gradient(#0000 45%, #0a0c0975);
 }
@@ -446,9 +471,14 @@
   min-height: 720px;
 }
 
+/* Both classes are set on the <img>, not on the <picture> around it, so the
+   `object-fit` these rules used to carry on a descendant `img` selector matched
+   nothing and the photographs were drawn with the initial `fill` — a 468x605
+   box holding a 5:6 file squashed it by 7%. */
 .heritage-main,
 .heritage-small {
   position: absolute;
+  object-fit: cover;
 }
 
 .heritage-main {
@@ -464,13 +494,6 @@
   width: 48%;
   height: 38%;
   border: 12px solid var(--paper);
-}
-
-.heritage-main img,
-.heritage-small img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .heritage-seal {
@@ -519,6 +542,12 @@
   align-items: end;
   max-width: var(--measure-narrow);
   margin: 0 auto 3.5rem;
+}
+
+/* The columns are bottom-aligned, so the eyebrow's own 1.2rem bottom margin
+   lifted it 19.2px clear of the heading's baseline instead of sitting on it. */
+.locations-heading .eyebrow {
+  margin-bottom: 0;
 }
 
 .location-grid {
@@ -578,6 +607,12 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  transition: color var(--step), border-color var(--step);
+}
+
+.location-actions a:hover {
+  color: var(--gold-light);
+  border-bottom-color: var(--gold-light);
 }
 
 /* --- pedidos --------------------------------------------------------------------- */
@@ -672,6 +707,12 @@
     gap: 5vw;
   }
 
+  /* Below this width the two bullet columns are ~136px each and every item
+     wraps to two lines, so the list goes single-column with the nav. */
+  .catering-details ul {
+    grid-template-columns: 1fr;
+  }
+
   .order-section {
     grid-template-columns: 1fr;
     gap: 2.5rem;
@@ -686,7 +727,9 @@
 @media (width <= 760px) {
   .top-note {
     gap: 0.4rem;
-    font-size: 0.56rem;
+    /* Was 0.56rem — 8.96px, the smallest type anywhere on the page, and by this
+       width the band has lost its message and is only the link. */
+    font-size: 0.65rem;
     letter-spacing: 0.09em;
   }
 
@@ -714,12 +757,13 @@
     padding: 11rem 1.25rem 4.5rem;
   }
 
-  .hero-image img {
+  .hero-image {
     object-position: 58% 50%;
   }
 
   .hero-shade {
     background:
+      linear-gradient(#0f120ec7 0%, #0f120e6b 8%, #0000 18%),
       linear-gradient(90deg, #0f120edb, #0f120e61),
       linear-gradient(#0000 40%, #0f120e8c);
   }

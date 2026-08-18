@@ -39,6 +39,12 @@
   transform: translateY(-2px);
 }
 
+/* Nothing on the page had a pressed state. Dropping the hover lift on press is
+   the smallest honest one: the button returns under the finger. */
+.button:active {
+  transform: none;
+}
+
 .button-small {
   border: 1px solid #ffffffa6;
   min-height: 42px;
@@ -107,4 +113,10 @@
 
 .light-link {
   color: var(--white);
+}
+
+/* The fixed phone bar is the primary action on a phone and had no pressed
+   state; hover is meaningless on touch, so this is :active only. */
+.mobile-order:active {
+  background: var(--white);
 }

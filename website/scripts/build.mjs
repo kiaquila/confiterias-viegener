@@ -7,7 +7,7 @@
 
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 import { images, origin as ORIGIN, unverifiedSections } from "../src/content.js";
 import { renderNotFound, renderPage } from "../src/render.js";
@@ -53,12 +53,25 @@ function checkImageAssets() {
   }
 }
 
+/* Working files that live beside the photographs but are not part of what a
+   visitor receives: `source/` holds the full-size originals the optimiser
+   reads, and README.md is the licence and provenance register, which records
+   what is still unresolved about these images. */
+const NOT_SHIPPED = new Set(["source", "README.md"]);
+
 async function copyAssets() {
-  await cp(join(root, "assets"), join(dist, "assets"), {
+  const from = join(root, "assets");
+  await cp(from, join(dist, "assets"), {
     recursive: true,
-    /* assets/source/ holds the full-size originals the optimiser reads. They
-       are inputs, not part of what ships. */
-    filter: (path) => !path.includes(`${"assets"}/source`)
+    /* Matched per path segment relative to assets/. A substring test on the
+       absolute path excludes anything merely *starting* with the name, so
+       `assets/source-notes.md` would silently vanish too. Dotted entries are
+       local tooling state and never ship. */
+    filter: (path) =>
+      !relative(from, path)
+        .split(sep)
+        .filter(Boolean)
+        .some((part) => NOT_SHIPPED.has(part) || part.startsWith("."))
   });
 }
 
@@ -80,7 +93,7 @@ async function main() {
   await mkdir(dist, { recursive: true });
 
   await writeFile(join(dist, "index.html"), renderPage(ORIGIN), "utf8");
-  await writeFile(join(dist, "404.html"), renderNotFound(ORIGIN), "utf8");
+  await writeFile(join(dist, "404.html"), renderNotFound(), "utf8");
 
   await copyAssets();
   await writeFile(join(dist, "assets/styles.css"), await buildStylesheet(), "utf8");
