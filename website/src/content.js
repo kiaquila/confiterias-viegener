@@ -1,11 +1,10 @@
 /* Every string on the page lives here and nowhere else.
 
-   Confiterías Viegener is a real business, but none of the wording, contact
-   details or opening hours below has been confirmed by the owner. They were
-   carried over from the concept prototype and are draft assumptions until the
-   client approves them — see `../../README.md`. `unverified` marks the blocks
-   whose factual content still needs that confirmation, and the build prints
-   them so an unapproved claim cannot quietly reach a customer-facing stage. */
+   The project owner approved this copy for use on this site on 2026-08-20, so
+   no block carries an `unverified` flag today. The flag and its reporting stay
+   in place: anything added later that the owner has not yet confirmed marks
+   itself `unverified: true`, and that alone pulls the page back out of search
+   and drops its sitemap until the flag is cleared again. */
 
 export const business = {
   name: "Confiterías Viegener",
@@ -18,9 +17,8 @@ export const business = {
   }
 };
 
-/* Where the built page believes it lives. It is a preview origin: this concept
-   has no customer-facing home, and must not be given one before the client
-   approves it. */
+/* Where the built page believes it lives, and the origin the canonical link,
+   the OG tags and the sitemap are built from. */
 export const origin = "https://confiterias-viegener.ks-design.workers.dev";
 
 export const links = {
@@ -46,8 +44,7 @@ export const locations = [
     city: "Buenos Aires",
     hours: ["Lun–Vie 7:30–20:00", "Sáb, Dom y feriados 8:00–20:00"],
     phoneLabel: "011 4791-2666",
-    phoneHref: "tel:+541147912666",
-    unverified: true
+    phoneHref: "tel:+541147912666"
   },
   {
     id: "palermo",
@@ -57,8 +54,7 @@ export const locations = [
     city: "Ciudad de Buenos Aires",
     hours: ["Lun–Vie 7:30–20:00", "Sáb, Dom y feriados 8:00–20:00"],
     phoneLabel: "011 4824-4910",
-    phoneHref: "tel:+541148244910",
-    unverified: true
+    phoneHref: "tel:+541148244910"
   }
 ];
 
@@ -115,7 +111,6 @@ export const content = {
     heading: "Un clásico para cada ocasión",
     lead:
       "Del desayuno de todos los días a una mesa de celebración: elaboramos cada pedido con materias primas de primera y atención a cada detalle.",
-    unverified: true,
     items: [
       {
         title: "Pastelería",
@@ -158,7 +153,6 @@ export const content = {
     image: "signature-cake",
     imageAlt: "Torta artesanal decorada con frutillas",
     imageNote: "Elaborado en nuestra casa",
-    unverified: true,
     items: [
       {
         title: "Torta Viegener",
@@ -180,7 +174,6 @@ export const content = {
     heading: "Tu evento, servido con oficio.",
     copy:
       "Propuestas dulces y saladas para reuniones de trabajo, celebraciones familiares y eventos empresariales. Te ayudamos a armar la selección según la ocasión y la cantidad de invitados.",
-    unverified: true,
     items: [
       "Bocaditos fríos y calientes",
       "Sándwiches de miga y empanadas",
@@ -192,7 +185,6 @@ export const content = {
   heritage: {
     eyebrow: "Una historia de oficio",
     heading: "De Alemania a Buenos Aires, una tradición que sigue viva.",
-    unverified: true,
     paragraphs: [
       "En 1949, Otto Viegener abrió su pastelería alemana y bombonería con recetas, moldes y saberes traídos de su tierra. Hoy, nuestros maestros siguen elaborando cada especialidad de forma artesanal en la casa de Vicente López y en nuestra sucursal de Palermo.",
       "Nuevas generaciones, el mismo compromiso: ingredientes naturales, producción cuidada y ese sabor que hace que nuestros clientes vuelvan."
@@ -246,8 +238,10 @@ export const images = {
   storefront: { widths: [640, 960], ratio: [4, 3] }
 };
 
-/** Sections whose factual content the client has not confirmed. The build
- *  reports these; the list empties as the owner approves each block. */
+/** Sections whose factual content the owner has not confirmed. Empty since the
+ *  2026-08-20 approval, and deliberately kept as the guard for anything added
+ *  after it: a single `unverified: true` re-applies `noindex` and withdraws the
+ *  sitemap, and the build prints the block name on every run. */
 export const unverifiedSections = Object.entries(content)
   .filter(([, block]) => block && typeof block === "object" && block.unverified)
   .map(([name]) => name)

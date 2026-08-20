@@ -146,10 +146,10 @@ async function main() {
     }
   }
 
-  /* An unapproved concept is not offered to crawlers at all, and it ships no
-     sitemap inviting them in: the page carries a real business's name and
-     unconfirmed phone numbers. Both flip together with the last `unverified`
-     flag in content.js. */
+  /* Unconfirmed copy is not offered to crawlers at all, and ships no sitemap
+     inviting them in: the page carries a real business's name and phone
+     numbers. Both follow the last `unverified` flag in content.js, so the
+     approved page is indexed and a later unconfirmed block withdraws it. */
   if (unverifiedSections.length > 0) {
     await writeFile(join(dist, "robots.txt"), "User-agent: *\nDisallow: /\n", "utf8");
   } else {

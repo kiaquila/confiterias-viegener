@@ -1,30 +1,57 @@
 # Image assets
 
-Every file in this directory needs a recorded source and licence. A photograph
-with neither does not ship.
+Every file in this directory needs a recorded source. This is that register.
 
-`source/` holds the full-size originals and is an input to
+`source/` holds the eight full-size originals and is an input to
 `npm run images`; it is not copied into `dist/`. The `<slot>-<width>.<ext>`
 derivatives beside it are what the page serves, and they are committed.
 
-## Provenance
+## Approval
 
-| Slot | Shown as | Source | Licence |
+The project owner approved the logo and all eight photographs for use on this
+site on **2026-08-20**.
+
+That is recorded as what it is: the project owner's decision to publish this
+material here. It is **not** a licence grant, and this file does not name a
+rights holder or a licence type for any image, because no such determination has
+been made. Anyone reusing these files elsewhere needs to settle that question
+first — the approval above covers this site only.
+
+## Register
+
+| Slot | Shown as | Source | Approved for this site |
 | --- | --- | --- | --- |
-| `brand-logo.png` | Wordmark, header and footer | Concept prototype | **Unresolved** — the business's own mark, used without permission |
-| `hero-catering` | Baker working dough | Concept prototype | **Unresolved** |
-| `product-spread` | Pastelería card | Concept prototype | **Unresolved** |
-| `heritage-photo` | Bombonería card | Concept prototype | **Unresolved** |
-| `bakers-hands` | Panadería card | Concept prototype | **Unresolved** |
-| `pastry-cake` | Desayunos & regalos card | Concept prototype | **Unresolved** |
-| `signature-cake` | Signature recipes band | Concept prototype | **Unresolved** |
-| `artisan-baker` | History, main image | Concept prototype | **Unresolved** |
-| `storefront` | History, inset image | Concept prototype | **Unresolved** |
+| `brand-logo.png` | Wordmark, header and footer | Concept prototype | Owner, 2026-08-20 |
+| `hero-catering` | Hero — baker working dough | Concept prototype | Owner, 2026-08-20 |
+| `product-spread` | Pastelería card | Concept prototype | Owner, 2026-08-20 |
+| `heritage-photo` | Bombonería card | Concept prototype | Owner, 2026-08-20 |
+| `bakers-hands` | Panadería card | Concept prototype | Owner, 2026-08-20 |
+| `pastry-cake` | Desayunos & regalos card | Concept prototype | Owner, 2026-08-20 |
+| `signature-cake` | Signature recipes band | Concept prototype | Owner, 2026-08-20 |
+| `artisan-baker` | History, main image | Concept prototype | Owner, 2026-08-20 |
+| `storefront` | History, inset image | Concept prototype | Owner, 2026-08-20 |
 
-None of these has a confirmed licence, and their prototype filenames did not
-describe what they show — the alt text in `content.js` describes the actual
-image, not the filename it arrived under.
+The prototype filenames did not describe what they show, so the alt text in
+`content.js` describes the actual image rather than the name it arrived under.
 
-**Before this project goes anywhere public**, every row above must be replaced
-with either the business's own photography or a licence that permits the use,
-with the licence recorded here.
+## Embedded metadata
+
+None of the shipped files carries EXIF, IPTC, XMP, GPS or camera-identifying
+metadata. The JPEGs hold a JFIF density header (APP0) and nothing else; the
+WebP and PNG files carry no metadata chunks. `make-images.mjs` passes `-strip`,
+which is what keeps that true, and every derivative regenerates byte-for-byte
+from `source/`.
+
+Re-check after changing the image pipeline or adding a photograph:
+
+```bash
+npm run images
+```
+
+## Adding an image
+
+1. Put the full-size original in `source/<slot>.<ext>`.
+2. Declare the slot and its widths in `images` in `src/content.js`.
+3. Run `npm run images` and commit both the original and the derivatives.
+4. Add a row above recording where the file came from and who approved it.
+5. Keep every shipped file under the 320KB budget the tests enforce.

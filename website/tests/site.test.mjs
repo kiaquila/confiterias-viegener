@@ -113,12 +113,13 @@ test("the seal states the tradition in whole years and stays in step with the fo
   );
 });
 
-/* --- unapproved content stays visible -------------------------------------- */
+/* --- the approval gate stays wired up --------------------------------------- */
 
-test("the concept copy is still flagged as unapproved by the client", () => {
-  /* This is a reminder, not a failure: it fails only if someone clears the
-     flags without also replacing the placeholder-grade factual content. The
-     list is expected to shrink to nothing once the owner confirms the copy. */
+test("the approval gate is still exported for the build to read", () => {
+  /* The list is empty: the owner approved the copy on 2026-08-20. The export
+     itself has to survive that, because it is what the build and `render.js`
+     branch on — delete it and the page would lose its `noindex` reflex for any
+     unconfirmed block added later, silently. */
   assert.ok(
     Array.isArray(unverifiedSections),
     "unverifiedSections must stay exported so the build can report it"
@@ -354,10 +355,12 @@ test("search engines and social cards get the page's own words", () => {
   assert.match(page, /rel="canonical"/);
 });
 
-test("an unapproved concept is not offered to search engines", async () => {
-  /* The page carries a real business's name, addresses and phone numbers that
-     nobody at that business has confirmed. Until they do, it must not be
-     indexable, and it must not advertise itself in a sitemap. */
+test("the search policy follows the approval state, not a hand-edited flag", async () => {
+  /* The page carries a real business's name, addresses and phone numbers. The
+     owner approved the current copy, so the page is indexable; if any block is
+     ever marked `unverified` again, the same build has to pull it back out of
+     search and withdraw the sitemap. Both directions are asserted here so the
+     guard cannot rot while the page happens to be approved. */
   const unapproved = unverifiedSections.length > 0;
   const robots = await readFile(join(dist, "robots.txt"), "utf8");
   if (unapproved) {
@@ -365,11 +368,16 @@ test("an unapproved concept is not offered to search engines", async () => {
     assert.match(robots, /^User-agent: \*\nDisallow: \/\n$/);
     await assert.rejects(
       () => stat(join(dist, "sitemap.xml")),
-      "an unapproved concept must not ship a sitemap"
+      "unapproved copy must not ship a sitemap"
     );
   } else {
-    assert.ok(!page.includes('name="robots"'));
-    assert.match(robots, /Allow: \//);
+    assert.ok(
+      !page.includes('name="robots"'),
+      "approved copy must not carry a robots meta tag"
+    );
+    assert.match(robots, /^User-agent: \*\nAllow: \/\nSitemap: \S+\/sitemap\.xml\n$/);
+    const sitemap = await readFile(join(dist, "sitemap.xml"), "utf8");
+    assert.match(sitemap, new RegExp(`<loc>${origin}/</loc>`));
   }
 });
 

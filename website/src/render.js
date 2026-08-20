@@ -16,11 +16,11 @@ import {
   unverifiedSections
 } from "./content.js";
 
-/* While any block is still an unapproved draft, the page must not be indexed.
-   It carries a real business's name, addresses and phone numbers that nobody
-   at that business has confirmed, so a search result pointing at it would put
-   unverified contact details in front of their customers. The tag comes off
-   with the last `unverified` flag, not by hand. */
+/* If any block is an unconfirmed draft, the page must not be indexed. It
+   carries a real business's name, addresses and phone numbers, so a search
+   result pointing at unconfirmed copy would put wrong contact details in front
+   of that business's customers. The tag follows the last `unverified` flag in
+   content.js, in both directions, and is never set by hand. */
 const isUnapproved = unverifiedSections.length > 0;
 
 const escapeHtml = (value = "") =>
