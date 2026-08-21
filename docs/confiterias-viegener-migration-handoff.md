@@ -1,14 +1,19 @@
 # Confiterías Viegener migration handoff
 
-This is the durable handoff record for the move to the private standalone
-repository `kiaquila/confiterias-viegener`. It distinguishes verified evidence
+This is the durable handoff record for the move to the standalone repository
+`kiaquila/confiterias-viegener`. The repository is **public for the duration of
+the migration**, which is a deliberate decision rather than a lapse: a GitHub
+Free private repository cannot run Actions once its included allowance is spent,
+and the migration needs green checks. Whether this repository ends up private is
+the owner's call once the migration closes out, and until they make it, public
+is the accepted state. It distinguishes verified evidence
 from accepted exceptions and unresolved work. It does not authorize a deploy or
 claim controls that the repository or hosting platform does not enforce.
 
 ## Destination and preserved history
 
-- Destination: private repository `kiaquila/confiterias-viegener`, default
-  branch `main`.
+- Destination: repository `kiaquila/confiterias-viegener`, default branch
+  `main`, currently public as described above.
 - Audited destination head: `230b7fe535e38c3ff4e0d590aea4bbdce02a1994`.
 - The repository preserves a five-commit chronological bootstrap history:
   `877359697324fa3e3ac231dbc3853375b630d8bd`,
@@ -65,12 +70,17 @@ pull request may change only the lock and managed bytes moved by the release.
 
 ## GitHub governance
 
-At the audit point, the private repository was on a GitHub Free plan that did
-not expose branch protection or repository rulesets for this private
-repository. `main` was therefore unprotected. The repository does not claim
-that pull requests, reviews, or required checks are technically enforced.
+At the audit point the repository was private on a GitHub Free plan, which did
+not expose branch protection or repository rulesets, so `main` was unprotected.
+The repository has since been made public, and branch protection is available to
+public repositories on Free — but none is configured yet:
+`repos/kiaquila/confiterias-viegener/branches/main/protection` returns 404, and
+no ruleset exists. So `main` is still unprotected in fact, and this record still
+does not claim that pull requests, reviews, or required checks are technically
+enforced. What changed is the reason: it is now an unapplied setting rather than
+an unavailable feature, and applying it is closeout work.
 
-Until the plan supports enforcement, maintainers apply these controls manually:
+Until it is applied, maintainers enforce these controls manually:
 
 1. Make every future change on a focused branch and ready-for-review pull
    request; do not push directly to `main`.
@@ -82,12 +92,16 @@ Until the plan supports enforcement, maintainers apply these controls manually:
 5. Do not force-push or delete `main`, and resolve conversations before merge.
 
 The first Actions runs on `230b7fe535e38c3ff4e0d590aea4bbdce02a1994`
-did not start because of the account billing or spending-limit state:
-`project-ci`, `repository-guard`, and `osv-scan` concluded failure with no job
-steps. The baseline verification workflow was skipped because its triggering
-Repository Guard run was a `push`, not a pull request. These are not green CI
-results. Billing must be resolved and all checks must run successfully on a
-pull-request head before merge. Secret scanning and push protection were also
+did not start, because the repository was private and its included Actions
+allowance was spent: `project-ci`, `repository-guard`, and `osv-scan` concluded
+failure with no job steps at all. The baseline verification workflow was skipped
+because its triggering Repository Guard run was a `push`, not a pull request.
+Those were never green CI results and must not be read as any.
+
+That cause is now removed rather than worked around — the repository is public,
+so its runs execute, and re-running those exact runs made them pass. No billing
+change was made and none is needed; the Actions budget stays at `$0`. All checks
+must still run successfully on the current pull-request head before merge. Secret scanning and push protection were also
 unavailable or disabled at the audit point; enable them when the plan exposes
 them, or keep recording the missing control.
 
@@ -144,7 +158,7 @@ change.
 
 ## Verification evidence
 
-The 2026-08-21 audit used a fresh clone of the private repository and completed
+The 2026-08-21 audit used a fresh clone of the repository and completed
 the following local checks without changing product files:
 
 - `npm ci --prefix website` completed successfully.
@@ -193,6 +207,12 @@ exists, and the two preview versions are not rollback candidates.
   Actions allowance, not the workflows: the repository is public again and its
   runs execute normally, so this is now an ordinary rerun-and-verify step.
 - Narrow and rotate the Cloudflare build token.
+- Apply branch protection to `main` now that the repository is public and the
+  feature is available, using the check names in `.web-design/project.json`.
+- Decide the final visibility. Public is the accepted migration-time state, not
+  a permanent one; returning to private means accepting that Actions stop once
+  the included allowance is spent, so that decision and its consequence belong
+  together.
 - Re-confirm active production version
   `fccb8c97-f9dc-406a-8eb9-e91845777c21` and verify the absence of any duplicate
   repository deployment source. Cloudflare has no older verified production
