@@ -130,6 +130,10 @@ any external origin.
 request a versioned URL shaped `https://<version>-confiterias-viegener.ks-design.workers.dev`.
 The version prefix is assigned by Cloudflare and must not be hard-coded.
 
+The standalone-repository migration, local and production verification,
+governance exceptions, and unresolved deployment evidence are recorded in
+[`docs/confiterias-viegener-migration-handoff.md`](./docs/confiterias-viegener-migration-handoff.md).
+
 ## Repository baseline
 
 Shared standards, the guard, CI, the review and OSV workflows and the update
@@ -150,14 +154,17 @@ Do not edit a managed file here. Changes to those come from the baseline through
 
 ### Required follow-up: pin an immutable release
 
-**The pinned commit above is provisional.** `0.1.0-dev` is a prerelease, and
-`f042879…` is the head of the unmerged `kiaquila/web-design` branch
-`codex/web-design-template-v2` (PR #46), not an immutable published release. It
-was used because no stable release existed when this repository was created.
+**The pinned commit above is provisional.** `0.1.0-dev` is not a published
+release, and `f042879…` is an earlier commit in the history of the unmerged
+`kiaquila/web-design` branch `codex/web-design-template-v2` (PR #46), not the
+current branch head. It was used because no stable release existed when this
+repository was created.
 
-A branch head can move or be rebased away. Until this pin is replaced,
-`baseline-source-verification` is verifying against a mutable ref, which is
-weaker than the guarantee that check is meant to give.
+The full SHA pins immutable content, so movement of the branch does not change
+the bytes being verified. The weakness is release governance: the commit has no
+published stable release identity, and deleting or rebasing its only branch may
+make it harder to retrieve. Replace it with the full SHA of the first published
+stable release.
 
 Once PR #46 is merged and the first immutable `web-design` release is published,
 sync this project onto that release's full 40-character SHA in its own pull
