@@ -120,12 +120,20 @@ versioned preview and branch preview alias returned a home page byte-identical
 to the local build. The check's preview URLs are durable GitHub evidence; do not
 hard-code them into product files.
 
-That successful preview does not identify the active production version or the
-preceding rollback version, and GitHub's deployments API has no record for the
-pull-request head. Before any future production deployment, record the active
-and previous version IDs from Cloudflare and verify that no other repository can
-deploy this Worker. Do not treat the preview or live-byte comparison below as
-proof of the production source connection or rollback route.
+At 2026-08-21 16:49 UTC, a read-only Wrangler inventory identified production
+deployment `668d0ce5-c9f4-4c3c-ab65-a40100226b99` routing 100% of traffic to
+version `fccb8c97-f9dc-406a-8eb9-e91845777c21`, created at
+2026-08-20 22:59:07 UTC. Cloudflare listed no preceding production deployment;
+versions `eda29209-9c9b-4147-b28e-e455261f8357` and
+`21ad9d67-d4e9-4f78-895c-a949e96a2ebb` are pull-request preview uploads and are
+not rollback production targets. Re-confirm the active deployment immediately
+before cutover. The safe rollback target is the recorded active version above;
+there is no independently verified older production version.
+
+GitHub's deployments API still has no record for the pull-request head. Before
+cutover, also verify that no other repository can deploy this Worker. Do not
+treat the preview or live-byte comparison below as proof of the production
+source connection or rollback route.
 
 Cloudflare adds `Report-To` and `NEL` response headers whose reporting endpoint
 is under `a.nel.cloudflare.com`. The repository owner accepts this as hosting
@@ -180,9 +188,10 @@ Cloudflare production version or previous rollback version.
 
 - Resolve GitHub Actions billing and obtain green current-head checks.
 - Narrow and rotate the Cloudflare build token.
-- Record the active production version, previous rollback version, and absence
-  of any duplicate repository deployment source. Pull request #1 supplies the
-  standalone preview evidence.
+- Re-confirm active production version
+  `fccb8c97-f9dc-406a-8eb9-e91845777c21` and verify the absence of any duplicate
+  repository deployment source. Cloudflare has no older verified production
+  version; pull request #1 supplies the standalone preview evidence.
 - Publish an immutable stable `web-design` release, then repin through a
   baseline-only pull request.
 - Resolve or explicitly retain the documented prototype and asset provenance
