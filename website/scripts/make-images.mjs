@@ -52,6 +52,18 @@ async function verifyApprovedSource(slot, source, manifest) {
   }
 }
 
+async function verifySourceWidth(slot, source, widths) {
+  const { stdout } = await run("magick", ["identify", "-format", "%w", source]);
+  const sourceWidth = Number.parseInt(stdout, 10);
+  const maximumWidth = Math.max(...widths);
+  if (!Number.isFinite(sourceWidth) || sourceWidth < maximumWidth) {
+    throw new Error(
+      `Original for "${slot}" is ${sourceWidth || "an unknown number of"}px wide, ` +
+        `but its largest responsive descriptor is ${maximumWidth}w.`
+    );
+  }
+}
+
 async function main() {
   try {
     await run("magick", ["-version"]);
@@ -69,6 +81,7 @@ async function main() {
   for (const [slot, config] of Object.entries(images)) {
     const source = await findSource(slot, entries);
     await verifyApprovedSource(slot, source, manifest);
+    await verifySourceWidth(slot, source, config.widths);
     for (const width of config.widths) {
       for (const extension of ["webp", "jpg"]) {
         const target = join(outDir, `${slot}-${width}.${extension}`);

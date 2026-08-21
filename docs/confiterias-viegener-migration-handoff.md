@@ -25,8 +25,9 @@ claim controls that the repository or hosting platform does not enforce.
   2026-08-20 content approval. The files it added as photography were later
   found to be temporary one-colour pipeline placeholders, not the approved
   prototype photographs. The restoration pull request replaces all eight
-  originals and all 34 derivatives with the approved prototype files and pins
-  their source paths and hashes in `website/assets/source/manifest.json`.
+  originals and all 32 correctly described derivatives with the approved
+  prototype files and pins their source paths and hashes in
+  `website/assets/source/manifest.json`.
 - The final commit installs the shared baseline without changing `website/`.
   All 46 managed files and the release manifest matched the pinned upstream
   source during the 2026-08-21 audit.

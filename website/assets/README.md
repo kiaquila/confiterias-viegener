@@ -7,6 +7,7 @@ Every file in this directory needs a recorded source. This is that register.
 derivatives beside it are what the page serves, and they are committed.
 `source/manifest.json` records the exact approved prototype path and SHA-256 for
 each original. Both the test suite and the image generator verify those hashes.
+The generator also refuses responsive widths larger than the approved original.
 
 ## Approval
 

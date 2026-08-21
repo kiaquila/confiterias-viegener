@@ -231,10 +231,10 @@ export const images = {
   "hero-catering": { widths: [960, 1600, 2000], ratio: [3, 2] },
   "product-spread": { widths: [640, 960], ratio: [4, 5] },
   "heritage-photo": { widths: [640, 960], ratio: [4, 5] },
-  "bakers-hands": { widths: [640, 960], ratio: [4, 5] },
+  "bakers-hands": { widths: [600], ratio: [4, 5] },
   "pastry-cake": { widths: [640, 960], ratio: [4, 5] },
   "signature-cake": { widths: [960, 1440], ratio: [3, 2] },
-  "artisan-baker": { widths: [640, 960], ratio: [5, 6] },
+  "artisan-baker": { widths: [640, 830], ratio: [5, 6] },
   storefront: { widths: [640, 960], ratio: [4, 3] }
 };
 
