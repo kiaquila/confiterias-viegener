@@ -195,28 +195,44 @@ At 2026-08-21 16:19–16:20 UTC, production verification returned:
 - byte equality between production and the local build for the home page,
   robots, sitemap, 404 page, stylesheet, script, and representative image.
 
-This proves the audited product bytes were live. The active Cloudflare
-production version is known — `fccb8c97-f9dc-406a-8eb9-e91845777c21`, from
-deployment `668d0ce5-c9f4-4c3c-ab65-a40100226b99`. What this verification does
-not supply is a previous rollback version: no older verified production version
-exists, and the two preview versions are not rollback candidates.
+This proves the audited product bytes were live at the audit point.
+
+The migration has since closed the rollback gap it recorded. Pull request #1
+merged as `1fdc44012a66cd23b6b3a1f2cd3d6ec206aa800e`, and a production build of
+that exact commit succeeded with the narrowed dedicated token: build
+`00d59d0a-5a08-42df-bae4-959e3de24784`, deployment
+`392f831f-222d-4a87-a742-6bac53e50597`, version
+`33ca308c-8701-4b36-be6c-dcc7f0bd31f2`, smoke-checked directly on the Worker —
+`/` 200, `/robots.txt` 200, a missing path 404, security headers intact. The
+immediate rollback target is deployment
+`d9703a3a-8721-4547-a54c-f3126f831eb7`, version
+`7819628a-f24f-4e88-b53d-5ce91c6cc1c0`; the older verified deployment
+`668d0ce5-c9f4-4c3c-ab65-a40100226b99`, version
+`fccb8c97-f9dc-406a-8eb9-e91845777c21`, remains behind it. A rollback version
+that actually exists is therefore on record for the first time.
 
 ## Remaining closeout blockers
 
 - Obtain green current-head checks. The blocker was the exhausted private-repo
   Actions allowance, not the workflows: the repository is public again and its
   runs execute normally, so this is now an ordinary rerun-and-verify step.
-- Narrow and rotate the Cloudflare build token.
+- ~~Narrow and rotate the Cloudflare build token.~~ Done: the active Builds
+  token was narrowed in place to Account Workers Scripts: Edit, Account
+  Settings: Read, User Memberships: Read, and User Details: Read — account
+  scope only, no Zone resources. The unused audit-era token
+  `confiterias-viegener build token v2` is not bound to Builds and is queued
+  for deletion pending the owner's confirmation.
 - Apply branch protection to `main` now that the repository is public and the
   feature is available, using the check names in `.web-design/project.json`.
 - Decide the final visibility. Public is the accepted migration-time state, not
   a permanent one; returning to private means accepting that Actions stop once
   the included allowance is spent, so that decision and its consequence belong
   together.
-- Re-confirm active production version
-  `fccb8c97-f9dc-406a-8eb9-e91845777c21` and verify the absence of any duplicate
-  repository deployment source. Cloudflare has no older verified production
-  version; pull request #1 supplies the standalone preview evidence.
+- ~~Re-confirm the active production version and verify the absence of any
+  duplicate repository deployment source.~~ Done: the active version is
+  `33ca308c-8701-4b36-be6c-dcc7f0bd31f2` from the merge commit, the rollback
+  chain above it is recorded, and the Worker's only Git source is
+  `kiaquila/confiterias-viegener`, root `/website`, branch `main`.
 - Publish an immutable stable `web-design` release, then repin through a
   baseline-only pull request.
 - Resolve or explicitly retain the documented prototype and asset provenance
