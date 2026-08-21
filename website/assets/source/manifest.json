@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "prototypeOrigin": "https://confiterias-viegener.krisredlips.chatgpt.site",
+  "approvedForSiteOn": "2026-08-20",
+  "retrievedOn": "2026-08-21",
+  "images": {
+    "hero-catering": {
+      "file": "hero-catering.jpg",
+      "prototypePath": "/hero-catering.jpg",
+      "sha256": "333f20de80a4c30ba10eb48d2067bcd89065ca6ff04d663ef7b4c9f65288e013"
+    },
+    "product-spread": {
+      "file": "product-spread.jpg",
+      "prototypePath": "/product-spread.jpg",
+      "sha256": "a4d266ab47fec06c978d82a55c96b6b742808e10897ca29344b175d2d654c51c"
+    },
+    "heritage-photo": {
+      "file": "heritage-photo.jpg",
+      "prototypePath": "/heritage-photo.jpg",
+      "sha256": "23c4a6185097679a0e58c0c73bf51ecdb7a6f109038c114c9f47a59591515114"
+    },
+    "bakers-hands": {
+      "file": "bakers-hands.png",
+      "prototypePath": "/location.png",
+      "sha256": "b8202875c743f27f9fc5b23cc03aee066fb2ba4bcf9a99e17533a04e0a8f249f"
+    },
+    "pastry-cake": {
+      "file": "pastry-cake.png",
+      "prototypePath": "/pastry-cake.png",
+      "sha256": "4a148656ad3a9a5978890474e2f5e1978f87d91909c1e30a7f6433385facf712"
+    },
+    "signature-cake": {
+      "file": "signature-cake.jpg",
+      "prototypePath": "/bakery-team.jpg",
+      "sha256": "e9c258a599652ad488ffdfc5ba55d598eaf5b8c0367f5f08f6c07432649b99eb"
+    },
+    "artisan-baker": {
+      "file": "artisan-baker.jpg",
+      "prototypePath": "/artisan-baker.jpg",
+      "sha256": "0a79b21b470a34330c7eae1fc30f4bd115a77e04641470ad924a17976ade31b5"
+    },
+    "storefront": {
+      "file": "storefront.jpg",
+      "prototypePath": "/pastry-feature.jpg",
+      "sha256": "7c129fcffb0a27fdb321a7359f1755d0bca79ba9c8815b47f71e6eda6f040f48"
+    }
+  }
+}

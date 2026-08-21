@@ -5,6 +5,9 @@ Every file in this directory needs a recorded source. This is that register.
 `source/` holds the eight full-size originals and is an input to
 `npm run images`; it is not copied into `dist/`. The `<slot>-<width>.<ext>`
 derivatives beside it are what the page serves, and they are committed.
+`source/manifest.json` records the exact approved prototype path and SHA-256 for
+each original. Both the test suite and the image generator verify those hashes.
+The generator also refuses responsive widths larger than the approved original.
 
 ## Approval
 
@@ -19,17 +22,17 @@ first — the approval above covers this site only.
 
 ## Register
 
-| Slot | Shown as | Source | Approved for this site |
+| Slot | Shown as | Approved prototype file | Approved for this site |
 | --- | --- | --- | --- |
-| `brand-logo.png` | Wordmark, header and footer | Concept prototype | Owner, 2026-08-20 |
-| `hero-catering` | Hero — baker working dough | Concept prototype | Owner, 2026-08-20 |
-| `product-spread` | Pastelería card | Concept prototype | Owner, 2026-08-20 |
-| `heritage-photo` | Bombonería card | Concept prototype | Owner, 2026-08-20 |
-| `bakers-hands` | Panadería card | Concept prototype | Owner, 2026-08-20 |
-| `pastry-cake` | Desayunos & regalos card | Concept prototype | Owner, 2026-08-20 |
-| `signature-cake` | Signature recipes band | Concept prototype | Owner, 2026-08-20 |
-| `artisan-baker` | History, main image | Concept prototype | Owner, 2026-08-20 |
-| `storefront` | History, inset image | Concept prototype | Owner, 2026-08-20 |
+| `brand-logo.png` | Wordmark, header and footer | `/brand-logo.png` | Owner, 2026-08-20 |
+| `hero-catering` | Hero — baker working dough | `/hero-catering.jpg` | Owner, 2026-08-20 |
+| `product-spread` | Pastelería card | `/product-spread.jpg` | Owner, 2026-08-20 |
+| `heritage-photo` | Bombonería card | `/heritage-photo.jpg` | Owner, 2026-08-20 |
+| `bakers-hands` | Panadería card | `/location.png` | Owner, 2026-08-20 |
+| `pastry-cake` | Desayunos & regalos card | `/pastry-cake.png` | Owner, 2026-08-20 |
+| `signature-cake` | Signature recipes band | `/bakery-team.jpg` | Owner, 2026-08-20 |
+| `artisan-baker` | History, main image | `/artisan-baker.jpg` | Owner, 2026-08-20 |
+| `storefront` | History, inset image | `/pastry-feature.jpg` | Owner, 2026-08-20 |
 
 The prototype filenames did not describe what they show, so the alt text in
 `content.js` describes the actual image rather than the name it arrived under.
@@ -51,7 +54,8 @@ npm run images
 ## Adding an image
 
 1. Put the full-size original in `source/<slot>.<ext>`.
-2. Declare the slot and its widths in `images` in `src/content.js`.
-3. Run `npm run images` and commit both the original and the derivatives.
-4. Add a row above recording where the file came from and who approved it.
-5. Keep every shipped file under the 320KB budget the tests enforce.
+2. Record its approved prototype path and SHA-256 in `source/manifest.json`.
+3. Declare the slot and its widths in `images` in `src/content.js`.
+4. Run `npm run images` and commit both the original and the derivatives.
+5. Add a row above recording where the file came from and who approved it.
+6. Keep every shipped file under the 320KB budget the tests enforce.

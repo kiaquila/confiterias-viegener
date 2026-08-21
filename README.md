@@ -107,6 +107,9 @@ The committed derivatives regenerate byte-for-byte from those originals, and
 `make-images.mjs` passes `-strip`, so no shipped image carries EXIF, IPTC, XMP,
 GPS or camera-identifying metadata. See
 [`website/assets/README.md`](./website/assets/README.md).
+The exact approved prototype paths and source hashes are pinned in
+`website/assets/source/manifest.json`; the generator refuses any source whose
+bytes do not match that manifest.
 
 ## Hosting
 

@@ -8,8 +8,9 @@
    width the markup references. */
 
 import { execFile } from "node:child_process";
-import { readdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { images } from "../src/content.js";
@@ -20,6 +21,7 @@ const sourceDir = join(root, "assets", "source");
 const outDir = join(root, "assets");
 
 const QUALITY = { webp: 78, jpg: 82 };
+const JPEG_BUDGET = "320kb";
 
 async function findSource(slot, entries) {
   const match = entries.find((name) => name.replace(/\.[^.]+$/, "") === slot);
@@ -29,6 +31,37 @@ async function findSource(slot, entries) {
     );
   }
   return join(sourceDir, match);
+}
+
+async function verifyApprovedSource(slot, source, manifest) {
+  const approved = manifest.images?.[slot];
+  if (!approved) {
+    throw new Error(`No approved source manifest entry for "${slot}".`);
+  }
+  if (basename(source) !== approved.file) {
+    throw new Error(
+      `Source file mismatch for "${slot}": expected ${approved.file}, found ${basename(source)}.`
+    );
+  }
+
+  const digest = createHash("sha256").update(await readFile(source)).digest("hex");
+  if (digest !== approved.sha256) {
+    throw new Error(
+      `Source hash mismatch for "${slot}". Refusing to generate derivatives from an unapproved file.`
+    );
+  }
+}
+
+async function verifySourceWidth(slot, source, widths) {
+  const { stdout } = await run("magick", ["identify", "-format", "%w", source]);
+  const sourceWidth = Number.parseInt(stdout, 10);
+  const maximumWidth = Math.max(...widths);
+  if (!Number.isFinite(sourceWidth) || sourceWidth < maximumWidth) {
+    throw new Error(
+      `Original for "${slot}" is ${sourceWidth || "an unknown number of"}px wide, ` +
+        `but its largest responsive descriptor is ${maximumWidth}w.`
+    );
+  }
 }
 
 async function main() {
@@ -42,23 +75,30 @@ async function main() {
   }
 
   const entries = await readdir(sourceDir);
+  const manifest = JSON.parse(await readFile(join(sourceDir, "manifest.json"), "utf8"));
   let written = 0;
 
   for (const [slot, config] of Object.entries(images)) {
     const source = await findSource(slot, entries);
+    await verifyApprovedSource(slot, source, manifest);
+    await verifySourceWidth(slot, source, config.widths);
     for (const width of config.widths) {
       for (const extension of ["webp", "jpg"]) {
         const target = join(outDir, `${slot}-${width}.${extension}`);
-        await run("magick", [
+        const args = [
           source,
           "-auto-orient",
           "-resize",
           `${width}x>`,
           "-strip",
           "-quality",
-          String(QUALITY[extension]),
-          target
-        ]);
+          String(QUALITY[extension])
+        ];
+        if (extension === "jpg") {
+          args.push("-define", `jpeg:extent=${JPEG_BUDGET}`);
+        }
+        args.push(target);
+        await run("magick", args);
         written += 1;
       }
     }
