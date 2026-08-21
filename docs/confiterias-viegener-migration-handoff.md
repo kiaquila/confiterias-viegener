@@ -121,9 +121,10 @@ agree on the following values:
 | Production deploy command | `npm run stage:deploy` |
 | Preview deploy command | `npm run stage:preview` |
 
-The connection uses a dedicated build token, but its scope is broader than the
-least privilege required by this Worker. Rotate or replace it with a narrowly
-scoped token before final closeout; never record the token value here.
+At the audit point the dedicated build token's scope was broader than the
+least privilege this Worker needs. That has since changed — the closeout record
+at the end of this document describes the narrowed scope and what remains open
+about the credential. Never record the token value here.
 
 GitHub had no Cloudflare check run or deployment record for the five preserved
 commits. After pull request #1 opened, Cloudflare's GitHub App successfully built
@@ -140,14 +141,26 @@ version `fccb8c97-f9dc-406a-8eb9-e91845777c21`, created at
 2026-08-20 22:59:07 UTC. Cloudflare listed no preceding production deployment;
 versions `eda29209-9c9b-4147-b28e-e455261f8357` and
 `21ad9d67-d4e9-4f78-895c-a949e96a2ebb` are pull-request preview uploads and are
-not rollback production targets. Re-confirm the active deployment immediately
-before cutover. The safe rollback target is the recorded active version above;
-there is no independently verified older production version.
+not rollback production targets. This inventory describes 2026-08-21 16:49 UTC;
+the closeout record at the end of this document carries the later verified
+deployment and the rollback chain that supersedes this paragraph's conclusion.
+Re-confirm the active deployment in the dashboard immediately before any
+rollback decision.
 
-GitHub's deployments API still has no record for the pull-request head. Before
-cutover, also verify that no other repository can deploy this Worker. Do not
-treat the preview or live-byte comparison below as proof of the production
-source connection or rollback route.
+GitHub's deployments API still has no record for the pull-request head. The
+audit also required verifying that no other repository can deploy this Worker,
+and warned that the preview and live-byte comparisons prove neither the
+production source connection nor the rollback route. That verification has
+since been recorded on three independent observations: Cloudflare Workers
+Builds binds exactly one connected repository per Worker, and the action-time
+dashboard inspection found this Worker's source to be
+`kiaquila/confiterias-viegener` (root `/website`, branch `main`); the
+`kiaquila/web-design` pull-request checks list `Workers Builds:` runs for
+`alex-neon`, `ember`, and `misha` and never for this Worker, so the old
+monorepo no longer triggers builds here; and the post-merge production build
+recorded in the closeout section was created by a commit that exists only in
+the standalone repository. If any of those observations stops holding, the
+verification is void and must be redone.
 
 Cloudflare adds `Report-To` and `NEL` response headers whose reporting endpoint
 is under `a.nel.cloudflare.com`. The repository owner accepts this as hosting
@@ -195,28 +208,57 @@ At 2026-08-21 16:19–16:20 UTC, production verification returned:
 - byte equality between production and the local build for the home page,
   robots, sitemap, 404 page, stylesheet, script, and representative image.
 
-This proves the audited product bytes were live. The active Cloudflare
-production version is known — `fccb8c97-f9dc-406a-8eb9-e91845777c21`, from
-deployment `668d0ce5-c9f4-4c3c-ab65-a40100226b99`. What this verification does
-not supply is a previous rollback version: no older verified production version
-exists, and the two preview versions are not rollback candidates.
+This proves the audited product bytes were live at the audit point.
+
+The migration has since closed the rollback gap it recorded. This is a
+**timestamped verified-deployment record, not a claim about the current
+deployment**: every merge to `main` — including the merge of the pull request
+that carries this paragraph — triggers a Workers build and supersedes whatever
+was current, so a "current" ID written here would be stale on arrival. What
+stays true is this: on 2026-08-21 (~19:40 UTC), merge commit
+`1fdc44012a66cd23b6b3a1f2cd3d6ec206aa800e` was built and deployed with the
+narrowed dedicated token — build `00d59d0a-5a08-42df-bae4-959e3de24784`,
+deployment `392f831f-222d-4a87-a742-6bac53e50597`, version
+`33ca308c-8701-4b36-be6c-dcc7f0bd31f2` — and smoke-checked directly on the
+Worker: `/` 200, `/robots.txt` 200, a missing path 404, security headers
+intact. When a later merge supersedes it, that verified deployment becomes the
+newest entry in the rollback chain, ahead of deployment
+`d9703a3a-8721-4547-a54c-f3126f831eb7` (version
+`7819628a-f24f-4e88-b53d-5ce91c6cc1c0`) and the older verified deployment
+`668d0ce5-c9f4-4c3c-ab65-a40100226b99` (version
+`fccb8c97-f9dc-406a-8eb9-e91845777c21`). The live "current" ID belongs in the
+Cloudflare dashboard, which is authoritative for it; this record deliberately
+does not chase it.
 
 ## Remaining closeout blockers
 
 - Obtain green current-head checks. The blocker was the exhausted private-repo
   Actions allowance, not the workflows: the repository is public again and its
   runs execute normally, so this is now an ordinary rerun-and-verify step.
-- Narrow and rotate the Cloudflare build token.
+- Cloudflare build token, split into its two halves because only one is done.
+  **Narrowing: done** — the active Builds token was narrowed in place to
+  Account Workers Scripts: Edit, Account Settings: Read, User Memberships:
+  Read, and User Details: Read; account scope only, no Zone resources.
+  **Rotation: still open** — narrowing in place keeps the same secret value
+  that existed while the scope was broad, so replacing the credential itself
+  remains closeout work. The unused audit-era token
+  `confiterias-viegener build token v2` is not bound to Builds and is queued
+  for deletion pending the owner's confirmation; deleting it rotates nothing.
 - Apply branch protection to `main` now that the repository is public and the
   feature is available, using the check names in `.web-design/project.json`.
 - Decide the final visibility. Public is the accepted migration-time state, not
   a permanent one; returning to private means accepting that Actions stop once
   the included allowance is spent, so that decision and its consequence belong
   together.
-- Re-confirm active production version
-  `fccb8c97-f9dc-406a-8eb9-e91845777c21` and verify the absence of any duplicate
-  repository deployment source. Cloudflare has no older verified production
-  version; pull request #1 supplies the standalone preview evidence.
+- Production-version verification, recast as what it can honestly be: a
+  historical record. The timestamped deployment above was verified when it was
+  current; every later merge to `main` — including this document's own —
+  supersedes the current deployment, so this item can never stay "done" as a
+  standing fact. The standing facts are the verified entries in the rollback
+  chain and the Worker's single Git source — `kiaquila/confiterias-viegener`,
+  root `/website`, branch `main`, with the duplicate-source verification and
+  its evidence recorded in the Cloudflare section above; the dashboard is
+  authoritative for whatever is current.
 - Publish an immutable stable `web-design` release, then repin through a
   baseline-only pull request.
 - Resolve or explicitly retain the documented prototype and asset provenance
