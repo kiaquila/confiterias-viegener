@@ -147,10 +147,20 @@ deployment and the rollback chain that supersedes this paragraph's conclusion.
 Re-confirm the active deployment in the dashboard immediately before any
 rollback decision.
 
-GitHub's deployments API still has no record for the pull-request head. Before
-cutover, also verify that no other repository can deploy this Worker. Do not
-treat the preview or live-byte comparison below as proof of the production
-source connection or rollback route.
+GitHub's deployments API still has no record for the pull-request head. The
+audit also required verifying that no other repository can deploy this Worker,
+and warned that the preview and live-byte comparisons prove neither the
+production source connection nor the rollback route. That verification has
+since been recorded on three independent observations: Cloudflare Workers
+Builds binds exactly one connected repository per Worker, and the action-time
+dashboard inspection found this Worker's source to be
+`kiaquila/confiterias-viegener` (root `/website`, branch `main`); the
+`kiaquila/web-design` pull-request checks list `Workers Builds:` runs for
+`alex-neon`, `ember`, and `misha` and never for this Worker, so the old
+monorepo no longer triggers builds here; and the post-merge production build
+recorded in the closeout section was created by a commit that exists only in
+the standalone repository. If any of those observations stops holding, the
+verification is void and must be redone.
 
 Cloudflare adds `Report-To` and `NEL` response headers whose reporting endpoint
 is under `a.nel.cloudflare.com`. The repository owner accepts this as hosting
@@ -246,8 +256,9 @@ does not chase it.
   supersedes the current deployment, so this item can never stay "done" as a
   standing fact. The standing facts are the verified entries in the rollback
   chain and the Worker's single Git source — `kiaquila/confiterias-viegener`,
-  root `/website`, branch `main`; the dashboard is authoritative for whatever
-  is current.
+  root `/website`, branch `main`, with the duplicate-source verification and
+  its evidence recorded in the Cloudflare section above; the dashboard is
+  authoritative for whatever is current.
 - Publish an immutable stable `web-design` release, then repin through a
   baseline-only pull request.
 - Resolve or explicitly retain the documented prototype and asset provenance
