@@ -181,12 +181,17 @@ At 2026-08-21 16:19–16:20 UTC, production verification returned:
 - byte equality between production and the local build for the home page,
   robots, sitemap, 404 page, stylesheet, script, and representative image.
 
-This proves the audited product bytes were live. It does not identify the active
-Cloudflare production version or previous rollback version.
+This proves the audited product bytes were live. The active Cloudflare
+production version is known — `fccb8c97-f9dc-406a-8eb9-e91845777c21`, from
+deployment `668d0ce5-c9f4-4c3c-ab65-a40100226b99`. What this verification does
+not supply is a previous rollback version: no older verified production version
+exists, and the two preview versions are not rollback candidates.
 
 ## Remaining closeout blockers
 
-- Resolve GitHub Actions billing and obtain green current-head checks.
+- Obtain green current-head checks. The blocker was the exhausted private-repo
+  Actions allowance, not the workflows: the repository is public again and its
+  runs execute normally, so this is now an ordinary rerun-and-verify step.
 - Narrow and rotate the Cloudflare build token.
 - Re-confirm active production version
   `fccb8c97-f9dc-406a-8eb9-e91845777c21` and verify the absence of any duplicate
