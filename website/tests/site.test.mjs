@@ -5,6 +5,7 @@
    change. Everything here reads dist/, so it tests what actually ships. */
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import test, { before } from "node:test";
@@ -26,6 +27,7 @@ let page = "";
 let notFound = "";
 let css = "";
 let script = "";
+let approvedSources = {};
 
 /* Compares against what a reader sees: tags dropped and entities decoded, so
    an apostrophe in the copy is matched as "'" and not as "&#039;". */
@@ -47,6 +49,9 @@ before(async () => {
   notFound = await readFile(join(dist, "404.html"), "utf8");
   css = await readFile(join(dist, "assets/styles.css"), "utf8");
   script = await readFile(join(dist, "assets/site.js"), "utf8");
+  approvedSources = JSON.parse(
+    await readFile(join(root, "assets/source/manifest.json"), "utf8")
+  );
 });
 
 /* --- the client's own words ------------------------------------------------ */
@@ -173,6 +178,39 @@ test("every image slot ships both formats at every width it advertises", async (
         const file = join(dist, "assets", `${name}-${width}.${extension}`);
         const info = await stat(file);
         assert.ok(info.isFile() && info.size > 0, `empty or missing: ${file}`);
+      }
+    }
+  }
+});
+
+test("the approved source manifest pins every photograph to the prototype bytes", async () => {
+  assert.deepEqual(Object.keys(approvedSources.images).sort(), Object.keys(images).sort());
+  const hashes = new Set();
+
+  for (const [name, approved] of Object.entries(approvedSources.images)) {
+    assert.match(approved.file, /^[a-z0-9-]+\.(?:jpg|png|webp)$/);
+    assert.match(approved.prototypePath, /^\/[a-z0-9-]+\.(?:jpg|png|webp)$/);
+    const source = await readFile(join(root, "assets/source", approved.file));
+    const digest = createHash("sha256").update(source).digest("hex");
+    assert.equal(digest, approved.sha256, `unapproved source bytes for ${name}`);
+    hashes.add(digest);
+  }
+
+  assert.equal(hashes.size, Object.keys(images).length, "every slot needs its own source image");
+});
+
+test("shipped photo derivatives are not flat placeholder files", async () => {
+  /* The accidentally migrated colour swatches compressed to 0.6–4.9KB as
+     WebP. Every derivative made from the approved photographs is comfortably
+     over 10KB, so this catches that exact failure without adding an image
+     decoder to the production dependency tree. */
+  const minimumPhotoBytes = 10 * 1024;
+  for (const [name, config] of Object.entries(images)) {
+    for (const width of config.widths) {
+      for (const extension of ["webp", "jpg"]) {
+        const file = join(dist, "assets", `${name}-${width}.${extension}`);
+        const { size } = await stat(file);
+        assert.ok(size > minimumPhotoBytes, `suspiciously flat photo derivative: ${file}`);
       }
     }
   }

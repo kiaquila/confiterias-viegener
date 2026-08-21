@@ -22,9 +22,11 @@ claim controls that the repository or hosting platform does not enforce.
   `bb0560b7c96deb13dae56a87894e1265a7328b8c`, and
   `230b7fe535e38c3ff4e0d590aea4bbdce02a1994`.
 - Commit `bb0560b7c96deb13dae56a87894e1265a7328b8c` records the
-  2026-08-20 content approval and adds the approved image set. Its `website/`
-  tree is `7aaf95127c14adb6b239110dc7d873a6c9e953df`, byte-identical to
-  `website/` at the audited destination head.
+  2026-08-20 content approval. The files it added as photography were later
+  found to be temporary one-colour pipeline placeholders, not the approved
+  prototype photographs. The restoration pull request replaces all eight
+  originals and all 34 derivatives with the approved prototype files and pins
+  their source paths and hashes in `website/assets/source/manifest.json`.
 - The final commit installs the shared baseline without changing `website/`.
   All 46 managed files and the release manifest matched the pinned upstream
   source during the 2026-08-21 audit.
@@ -37,21 +39,23 @@ commits. This exception does not permit future direct pushes to `main`.
 
 ## Source and asset provenance limits
 
-The root commit records a hand port from an authenticated ChatGPT-hosted concept
-preview. No immutable preview URL, export hash, source repository, or source
-commit for that prototype was retained. The repository owner accepted this as
-the source-provenance exception for the standalone bootstrap on 2026-08-21. Do
-not invent a missing identifier or describe this as exact source-tree equality
-with the old monorepository.
+The root commit records a hand port from the authenticated ChatGPT-hosted
+concept preview at `https://confiterias-viegener.krisredlips.chatgpt.site/`.
+That URL is live but not an immutable release or source commit. The repository
+owner accepted this as the source-provenance exception for the standalone
+bootstrap on 2026-08-21. The restoration records the exact prototype asset path
+and retrieved SHA-256 for each approved photograph; it still does not establish
+source-tree equality with the old monorepository.
 
 The project owner approved the page copy, logo, and eight photographs for use on
-this site on 2026-08-20. `website/assets/README.md` records their available
-source as “Concept prototype.” No author, rights holder, or licence has been
-determined. The approval is the only documented basis for current publication;
-it does not establish licensed provenance and does not permit reuse elsewhere.
-This remains an unresolved provenance and rights risk. If final closeout
-requires a confirmed third-party licence, the assets must be replaced or their
-rights and origin documented first.
+this site on 2026-08-20. `website/assets/README.md` records the prototype file
+mapping and `website/assets/source/manifest.json` pins the exact retrieved
+bytes. No author, rights holder, or licence has been determined. The approval
+is the only documented basis for current publication; it does not establish
+licensed provenance and does not permit reuse elsewhere. This remains an
+unresolved provenance and rights risk. If final closeout requires a confirmed
+third-party licence, the assets must be replaced or their rights documented
+first.
 
 ## Baseline
 
@@ -196,6 +200,12 @@ JavaScript-independent reading and ordering paths, and local-only runtime
 assets. A complete manual keyboard tab sequence and an operating-system
 reduced-motion session were not independently recorded and remain manual checks
 for a future product-changing pull request.
+
+The checks above established file availability and internal reproducibility,
+but did not inspect visual entropy. They therefore accepted the temporary
+one-colour files as photographs. The restoration adds an approved-source hash
+manifest plus a derivative-size regression check and supersedes that asset
+portion of the audit evidence.
 
 At 2026-08-21 16:19–16:20 UTC, production verification returned:
 
