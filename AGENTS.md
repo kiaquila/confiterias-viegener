@@ -28,11 +28,12 @@ task-relevant product documents before changing the project.
 - Do not overwrite a locally changed managed baseline file. Resolve the drift
   explicitly in the update pull request.
 - The baseline pin is provisional: `.web-design/lock.json` points at
-  `f042879…`, the head of the unmerged `web-design` branch `codex/web-design-template-v2`
-  (PR #46), because no immutable release existed when this repository was
-  created. Replacing it with the first published release SHA is a required
-  follow-up — see "Required follow-up" in the root `README.md`. Do not treat the
-  current pin as a stable release, and do not merge PR #46 from this project.
+  `f042879…`, an earlier commit in the history of the unmerged `web-design`
+  branch `codex/web-design-template-v2` (PR #46), because no stable release
+  existed when this repository was created. Replacing it with the first
+  published release SHA is a required follow-up — see "Required follow-up" in
+  the root `README.md`. Do not treat the current pin as a stable release, and do
+  not merge PR #46 from this project.
 
 ## Git and completion
 
@@ -141,5 +142,5 @@ evidence. Two breakpoints change how the page is navigated:
   so between 760 and 1080 the hero's order button scrolls away with the hero.
 - **`width <= 760px`** — the phone layout proper.
 
-Check 1079 and 1080 specifically. They sit on opposite sides of the nav/order-bar
+Check 1080 and 1081 specifically. They sit on opposite sides of the nav/order-bar
 handover, and a screenshot at 1440 shows neither.
