@@ -111,14 +111,21 @@ The connection uses a dedicated build token, but its scope is broader than the
 least privilege required by this Worker. Rotate or replace it with a narrowly
 scoped token before final closeout; never record the token value here.
 
-The repository does not contain, and the local audit could not retrieve, the
-active Cloudflare deployment/version identifier or the preceding rollback
-version. GitHub also had no Cloudflare check run or deployment record for the
-five preserved commits. Before any future production deployment, record the
-active and previous version IDs from Cloudflare, verify that no other repository
-can deploy this Worker, and prove a preview from the standalone repository. Do
-not treat the live-byte comparison below as proof of the source connection or
-rollback route.
+GitHub had no Cloudflare check run or deployment record for the five preserved
+commits. After pull request #1 opened, Cloudflare's GitHub App successfully built
+exact head `1096824c83aff83adf59bed20470b2e28cadb06d` as build
+`e59a993c-f67e-41c5-8178-157f64928275` and version
+`eda29209-9c9b-4147-b28e-e455261f8357`. At 2026-08-21 16:37 UTC, both the
+versioned preview and branch preview alias returned a home page byte-identical
+to the local build. The check's preview URLs are durable GitHub evidence; do not
+hard-code them into product files.
+
+That successful preview does not identify the active production version or the
+preceding rollback version, and GitHub's deployments API has no record for the
+pull-request head. Before any future production deployment, record the active
+and previous version IDs from Cloudflare and verify that no other repository can
+deploy this Worker. Do not treat the preview or live-byte comparison below as
+proof of the production source connection or rollback route.
 
 Cloudflare adds `Report-To` and `NEL` response headers whose reporting endpoint
 is under `a.nel.cloudflare.com`. The repository owner accepts this as hosting
@@ -166,15 +173,16 @@ At 2026-08-21 16:19–16:20 UTC, production verification returned:
 - byte equality between production and the local build for the home page,
   robots, sitemap, 404 page, stylesheet, script, and representative image.
 
-This proves the audited product bytes were live. It does not identify the
-Cloudflare deployment or previous rollback version.
+This proves the audited product bytes were live. It does not identify the active
+Cloudflare production version or previous rollback version.
 
 ## Remaining closeout blockers
 
 - Resolve GitHub Actions billing and obtain green current-head checks.
 - Narrow and rotate the Cloudflare build token.
-- Record the active deployment, previous rollback version, standalone preview,
-  and absence of any duplicate repository deployment source.
+- Record the active production version, previous rollback version, and absence
+  of any duplicate repository deployment source. Pull request #1 supplies the
+  standalone preview evidence.
 - Publish an immutable stable `web-design` release, then repin through a
   baseline-only pull request.
 - Resolve or explicitly retain the documented prototype and asset provenance
