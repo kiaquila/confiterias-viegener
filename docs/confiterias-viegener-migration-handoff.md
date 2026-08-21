@@ -121,9 +121,10 @@ agree on the following values:
 | Production deploy command | `npm run stage:deploy` |
 | Preview deploy command | `npm run stage:preview` |
 
-The connection uses a dedicated build token, but its scope is broader than the
-least privilege required by this Worker. Rotate or replace it with a narrowly
-scoped token before final closeout; never record the token value here.
+At the audit point the dedicated build token's scope was broader than the
+least privilege this Worker needs. That has since changed — the closeout record
+at the end of this document describes the narrowed scope and what remains open
+about the credential. Never record the token value here.
 
 GitHub had no Cloudflare check run or deployment record for the five preserved
 commits. After pull request #1 opened, Cloudflare's GitHub App successfully built
@@ -140,9 +141,11 @@ version `fccb8c97-f9dc-406a-8eb9-e91845777c21`, created at
 2026-08-20 22:59:07 UTC. Cloudflare listed no preceding production deployment;
 versions `eda29209-9c9b-4147-b28e-e455261f8357` and
 `21ad9d67-d4e9-4f78-895c-a949e96a2ebb` are pull-request preview uploads and are
-not rollback production targets. Re-confirm the active deployment immediately
-before cutover. The safe rollback target is the recorded active version above;
-there is no independently verified older production version.
+not rollback production targets. This inventory describes 2026-08-21 16:49 UTC;
+the closeout record at the end of this document carries the later verified
+deployment and the rollback chain that supersedes this paragraph's conclusion.
+Re-confirm the active deployment in the dashboard immediately before any
+rollback decision.
 
 GitHub's deployments API still has no record for the pull-request head. Before
 cutover, also verify that no other repository can deploy this Worker. Do not
@@ -222,24 +225,29 @@ does not chase it.
 - Obtain green current-head checks. The blocker was the exhausted private-repo
   Actions allowance, not the workflows: the repository is public again and its
   runs execute normally, so this is now an ordinary rerun-and-verify step.
-- ~~Narrow and rotate the Cloudflare build token.~~ Done: the active Builds
-  token was narrowed in place to Account Workers Scripts: Edit, Account
-  Settings: Read, User Memberships: Read, and User Details: Read — account
-  scope only, no Zone resources. The unused audit-era token
+- Cloudflare build token, split into its two halves because only one is done.
+  **Narrowing: done** — the active Builds token was narrowed in place to
+  Account Workers Scripts: Edit, Account Settings: Read, User Memberships:
+  Read, and User Details: Read; account scope only, no Zone resources.
+  **Rotation: still open** — narrowing in place keeps the same secret value
+  that existed while the scope was broad, so replacing the credential itself
+  remains closeout work. The unused audit-era token
   `confiterias-viegener build token v2` is not bound to Builds and is queued
-  for deletion pending the owner's confirmation.
+  for deletion pending the owner's confirmation; deleting it rotates nothing.
 - Apply branch protection to `main` now that the repository is public and the
   feature is available, using the check names in `.web-design/project.json`.
 - Decide the final visibility. Public is the accepted migration-time state, not
   a permanent one; returning to private means accepting that Actions stop once
   the included allowance is spent, so that decision and its consequence belong
   together.
-- ~~Re-confirm the active production version and verify the absence of any
-  duplicate repository deployment source.~~ Done: the active version is
-  the timestamped verified deployment recorded above (superseded by each later
-  merge, per the note there), the rollback chain is recorded, and the Worker's
-  only Git source is
-  `kiaquila/confiterias-viegener`, root `/website`, branch `main`.
+- Production-version verification, recast as what it can honestly be: a
+  historical record. The timestamped deployment above was verified when it was
+  current; every later merge to `main` — including this document's own —
+  supersedes the current deployment, so this item can never stay "done" as a
+  standing fact. The standing facts are the verified entries in the rollback
+  chain and the Worker's single Git source — `kiaquila/confiterias-viegener`,
+  root `/website`, branch `main`; the dashboard is authoritative for whatever
+  is current.
 - Publish an immutable stable `web-design` release, then repin through a
   baseline-only pull request.
 - Resolve or explicitly retain the documented prototype and asset provenance
