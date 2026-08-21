@@ -197,19 +197,25 @@ At 2026-08-21 16:19–16:20 UTC, production verification returned:
 
 This proves the audited product bytes were live at the audit point.
 
-The migration has since closed the rollback gap it recorded. Pull request #1
-merged as `1fdc44012a66cd23b6b3a1f2cd3d6ec206aa800e`, and a production build of
-that exact commit succeeded with the narrowed dedicated token: build
-`00d59d0a-5a08-42df-bae4-959e3de24784`, deployment
-`392f831f-222d-4a87-a742-6bac53e50597`, version
-`33ca308c-8701-4b36-be6c-dcc7f0bd31f2`, smoke-checked directly on the Worker —
-`/` 200, `/robots.txt` 200, a missing path 404, security headers intact. The
-immediate rollback target is deployment
-`d9703a3a-8721-4547-a54c-f3126f831eb7`, version
-`7819628a-f24f-4e88-b53d-5ce91c6cc1c0`; the older verified deployment
-`668d0ce5-c9f4-4c3c-ab65-a40100226b99`, version
-`fccb8c97-f9dc-406a-8eb9-e91845777c21`, remains behind it. A rollback version
-that actually exists is therefore on record for the first time.
+The migration has since closed the rollback gap it recorded. This is a
+**timestamped verified-deployment record, not a claim about the current
+deployment**: every merge to `main` — including the merge of the pull request
+that carries this paragraph — triggers a Workers build and supersedes whatever
+was current, so a "current" ID written here would be stale on arrival. What
+stays true is this: on 2026-08-21 (~19:40 UTC), merge commit
+`1fdc44012a66cd23b6b3a1f2cd3d6ec206aa800e` was built and deployed with the
+narrowed dedicated token — build `00d59d0a-5a08-42df-bae4-959e3de24784`,
+deployment `392f831f-222d-4a87-a742-6bac53e50597`, version
+`33ca308c-8701-4b36-be6c-dcc7f0bd31f2` — and smoke-checked directly on the
+Worker: `/` 200, `/robots.txt` 200, a missing path 404, security headers
+intact. When a later merge supersedes it, that verified deployment becomes the
+newest entry in the rollback chain, ahead of deployment
+`d9703a3a-8721-4547-a54c-f3126f831eb7` (version
+`7819628a-f24f-4e88-b53d-5ce91c6cc1c0`) and the older verified deployment
+`668d0ce5-c9f4-4c3c-ab65-a40100226b99` (version
+`fccb8c97-f9dc-406a-8eb9-e91845777c21`). The live "current" ID belongs in the
+Cloudflare dashboard, which is authoritative for it; this record deliberately
+does not chase it.
 
 ## Remaining closeout blockers
 
@@ -230,8 +236,9 @@ that actually exists is therefore on record for the first time.
   together.
 - ~~Re-confirm the active production version and verify the absence of any
   duplicate repository deployment source.~~ Done: the active version is
-  `33ca308c-8701-4b36-be6c-dcc7f0bd31f2` from the merge commit, the rollback
-  chain above it is recorded, and the Worker's only Git source is
+  the timestamped verified deployment recorded above (superseded by each later
+  merge, per the note there), the rollback chain is recorded, and the Worker's
+  only Git source is
   `kiaquila/confiterias-viegener`, root `/website`, branch `main`.
 - Publish an immutable stable `web-design` release, then repin through a
   baseline-only pull request.
