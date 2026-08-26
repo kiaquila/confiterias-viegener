@@ -21,10 +21,11 @@ permissions:
 jobs:
   verify:
     name: trusted-repository-guard
-    if: >-
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.pull_requests[0] != null &&
-      github.event.workflow_run.pull_requests[1] == null
+    # Every pull-request-originated completion runs this job. An association
+    # that is not exactly one is published as a failure, never skipped: GitHub
+    # treats a skipped required job as non-blocking, which would satisfy the
+    # context without the default branch's policy ever seeing the head.
+    if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the trusted policy from the default branch
@@ -51,12 +52,19 @@ jobs:
         shell: bash
         env:
           ASSOCIATED_HEAD_SHA: ${{ github.event.workflow_run.pull_requests[0].head.sha }}
+          SECOND_ASSOCIATION: ${{ github.event.workflow_run.pull_requests[1].head.sha }}
           RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set +e
           conclusion=success
           summary="The default branch's repository guard passed on this pull-request head."
-          if [ "$RUN_HEAD_SHA" != "$ASSOCIATED_HEAD_SHA" ]; then
+          if [ -z "$ASSOCIATED_HEAD_SHA" ]; then
+            conclusion=failure
+            summary="The Project CI run has no pull-request association to verify."
+          elif [ -n "$SECOND_ASSOCIATION" ]; then
+            conclusion=failure
+            summary="The Project CI run is associated with more than one pull request."
+          elif [ "$RUN_HEAD_SHA" != "$ASSOCIATED_HEAD_SHA" ]; then
             conclusion=failure
             summary="The Project CI run's SHA does not match the associated pull-request head."
           else

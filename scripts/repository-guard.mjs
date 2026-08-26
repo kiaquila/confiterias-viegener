@@ -410,6 +410,39 @@ export function workflowJobNames(text) {
 export const TRUSTED_GUARD_WORKFLOW = ".github/workflows/trusted-repository-guard.yml";
 export const TRUSTED_GUARD_CHECK = "trusted-repository-guard";
 
+// What the trusted verifier has to actually do. Reserving its name and its
+// trigger is not enough: without this, a proposal could replace its body with
+// `echo success` and every later pull request would receive a green required
+// context without being scanned at all. These are structural requirements, not
+// a proof of correctness — but they cost a replacement its silence.
+const TRUSTED_VERIFIER_REQUIREMENTS = [
+  [/ref:\s*\$\{\{\s*github\.event\.repository\.default_branch\s*\}\}/,
+    "check out the default branch's policy"],
+  [/ref:\s*\$\{\{\s*github\.event\.workflow_run\.head_sha\s*\}\}/,
+    "check out the pull-request head"],
+  [/path:\s*\.guard-proposed/, "check that head out into .guard-proposed"],
+  [/scripts\/repository-guard\.mjs[\s\S]{0,200}--root "\$GITHUB_WORKSPACE\/\.guard-proposed"/,
+    "run the default branch's guard against that checkout"],
+  [/-z "\$ASSOCIATED_HEAD_SHA"/, "fail when the run has no pull-request association"],
+  [/-n "\$SECOND_ASSOCIATION"/, "fail when the run is associated with more than one"],
+  [/"\$RUN_HEAD_SHA" != "\$ASSOCIATED_HEAD_SHA"/,
+    "fail when the run's SHA is not the pull-request head"],
+  [/-f name=trusted-repository-guard/, "publish the trusted check"],
+  [/-f head_sha="\$HEAD_SHA"/, "bind that check to the head SHA"],
+  [/\[ "\$CONCLUSION" = "success" \]/, "fail the job when the verdict is not success"]
+];
+
+export function validateTrustedVerifier(text) {
+  const missing = TRUSTED_VERIFIER_REQUIREMENTS
+    .filter(([pattern]) => !pattern.test(text))
+    .map(([, description]) => description);
+  const triggers = workflowTriggers(text);
+  if (!triggers || !triggers.has("workflow_run")) {
+    missing.push("run only from a workflow_run completion");
+  }
+  return missing;
+}
+
 export function validateWorkflowText(path, text) {
   const failures = [];
   if (/\bpull_request_target\b/.test(text)) {
@@ -455,6 +488,11 @@ export function validateWorkflowText(path, text) {
   // Project CI would stop the trusted verifier's workflow_run from firing, and
   // a proposed job carrying the trusted name would then be the only success
   // reported under a required check that never actually ran.
+  if (path === TRUSTED_GUARD_WORKFLOW) {
+    for (const missing of validateTrustedVerifier(text)) {
+      failures.push(`${TRUSTED_GUARD_WORKFLOW} must ${missing}`);
+    }
+  }
   if (path === TRUSTED_GUARD_WORKFLOW && proposed) {
     failures.push(
       `${TRUSTED_GUARD_WORKFLOW} may not be reachable from pull-request events; ` +

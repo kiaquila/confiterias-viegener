@@ -12,6 +12,7 @@ import {
   workflowJobNames,
   reachableFromPullRequest,
   unreachableFromPullRequest,
+  validateTrustedVerifier,
   validateWorkflowText,
   workflowTriggers
 } from "../scripts/repository-guard.mjs";
@@ -48,23 +49,24 @@ function makeFixture() {
   ]) write(root, path);
   cpSync(guardScript, join(root, "scripts/repository-guard.mjs"));
 
-  for (const [file, name] of [
-    ["ci", "Project CI"],
-    ["trusted-repository-guard", "Trusted Repository Guard"]
-  ]) {
-    write(root, `.github/workflows/${file}.yml`, [
-      `name: ${name}`,
-      "on: push",
-      "permissions:",
-      "  contents: read",
-      "jobs:",
-      "  check:",
-      "    runs-on: ubuntu-latest",
-      "    steps:",
-      `      - uses: actions/checkout@${checkoutSha}`,
-      ""
-    ].join("\n"));
-  }
+  write(root, ".github/workflows/ci.yml", [
+    "name: Project CI",
+    "on: push",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  check:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    `      - uses: actions/checkout@${checkoutSha}`,
+    ""
+  ].join("\n"));
+  // The real verifier, because the guard now requires its body and not just
+  // its name — a stub would not be a conforming repository.
+  cpSync(
+    join(repositoryRoot, ".github/workflows/trusted-repository-guard.yml"),
+    join(root, ".github/workflows/trusted-repository-guard.yml")
+  );
 
   git(root, "init", "-q");
   git(root, "add", "-A");
@@ -174,8 +176,18 @@ test("an immutable workflow_run job judges the head with the default branch's gu
     workflow,
     /node "\$GITHUB_WORKSPACE\/scripts\/repository-guard\.mjs" \\\n\s+--root "\$GITHUB_WORKSPACE\/\.guard-proposed"/
   );
-  // Fails closed when the completed run is no longer the pull request's head.
+  // Fails closed when the completed run is no longer the pull request's head,
+  // and when the association is anything other than exactly one — a skipped
+  // required job would otherwise satisfy the context unexamined.
   assert.match(workflow, /RUN_HEAD_SHA" != "\$ASSOCIATED_HEAD_SHA"/);
+  assert.match(workflow, /-z "\$ASSOCIATED_HEAD_SHA"/);
+  assert.match(workflow, /-n "\$SECOND_ASSOCIATION"/);
+  assert.match(workflow, /if: github\.event\.workflow_run\.event == 'pull_request'/);
+  assert.doesNotMatch(
+    workflow,
+    /pull_requests\[1\] == null/,
+    "an ambiguous association must fail, not skip the job"
+  );
   assert.match(workflow, /-f name=trusted-repository-guard/);
   assert.match(workflow, /-f head_sha="\$HEAD_SHA"/);
 });
@@ -654,23 +666,12 @@ test("the trusted check name and the workflow it keys off are reserved", () => {
     assert.match(failures.join("\n"), /Only .* may publish the trusted-repository-guard check/, job);
   }
 
-  // The verifier itself is of course allowed to publish it.
+  // The verifier itself is of course allowed to publish it — the real one,
+  // since carrying the name now also means doing the work.
   assert.deepEqual(
     validateWorkflowText(
       ".github/workflows/trusted-repository-guard.yml",
-      workflow([
-        "name: Trusted Repository Guard",
-        "on:",
-        "  workflow_run:",
-        "permissions:",
-        "  contents: read",
-        "jobs:",
-        "  verify:",
-        "    name: trusted-repository-guard",
-        "    runs-on: ubuntu-latest",
-        "    steps:",
-        "      - run: true"
-      ])
+      readFileSync(join(repositoryRoot, ".github/workflows/trusted-repository-guard.yml"), "utf8")
     ),
     []
   );
@@ -698,6 +699,41 @@ test("the trusted name is refused wherever a pull request could publish it", () 
   );
   assert.match(failures.join("\n"), /may not be reachable from pull-request events/);
   assert.match(failures.join("\n"), /Only the immutable .* may publish/);
+});
+
+test("the trusted verifier's body is required, not just its name", () => {
+  // Reserving the name and the trigger is not enough on its own: a proposal
+  // could keep both and replace the work with a no-op.
+  const noop = workflow([
+    "name: Trusted Repository Guard",
+    "on:",
+    "  workflow_run:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  verify:",
+    "    name: trusted-repository-guard",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: echo success"
+  ]);
+  const missing = validateTrustedVerifier(noop);
+  assert.ok(missing.length >= 8, missing.join("; "));
+  assert.match(
+    validateWorkflowText(".github/workflows/trusted-repository-guard.yml", noop).join("\n"),
+    /must run the default branch's guard against that checkout/
+  );
+
+  // The verifier this repository ships satisfies every requirement.
+  const real = readFileSync(
+    join(repositoryRoot, ".github/workflows/trusted-repository-guard.yml"),
+    "utf8"
+  );
+  assert.deepEqual(validateTrustedVerifier(real), []);
+  assert.deepEqual(
+    validateWorkflowText(".github/workflows/trusted-repository-guard.yml", real),
+    []
+  );
 });
 
 test("an escaped job name cannot smuggle in the trusted check name", () => {
