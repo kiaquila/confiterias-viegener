@@ -32,6 +32,10 @@ const REQUIRED_FILES = [
   "website/wrangler.json"
 ];
 
+// Above this a file is refused rather than skipped; nothing this repository
+// ships comes close.
+const MAX_SCAN_BYTES = 20_000_000;
+
 const FORBIDDEN_SEGMENTS = new Set([
   ".next",
   ".vinext",
@@ -97,10 +101,6 @@ function repositoryFiles(root) {
   };
 }
 
-function looksBinary(buffer) {
-  return buffer.subarray(0, Math.min(buffer.length, 8192)).includes(0);
-}
-
 // Workflow reading. There is no YAML parser here and this repository has no
 // dependencies, so the reader never assumes a shape: indentation is derived
 // from the document, keys are matched in every spelling YAML allows, and
@@ -125,7 +125,11 @@ function keyOf(content) {
 const UNSUPPORTED_YAML = [
   [/^\s*<<\s*:/, "merge key"],
   [/(?:^|\s)&[A-Za-z0-9_-]+\s*$/, "anchor"],
-  [/(?:^|\s)\*[A-Za-z0-9_-]+\s*$/, "alias"]
+  [/(?:^|\s)\*[A-Za-z0-9_-]+\s*$/, "alias"],
+  // A double-quoted key decodes escapes, so `"permiss\\u0069ons":` is the
+  // permissions key to GitHub but not to any spelling this reader matches.
+  // Decoding YAML escapes is out of scope; refusing them is not.
+  [/^"[^"]*\\[^"]*"\s*:/, "escaped key"]
 ];
 
 function lineModel(text) {
@@ -397,7 +401,7 @@ export function validateWorkflowText(path, text) {
   return failures;
 }
 
-export function scanRepository(root) {
+export function scanRepository(root, { maxScanBytes = MAX_SCAN_BYTES } = {}) {
   const failures = [];
 
   const { files, tracked, trustedGuardPathsTracked } = repositoryFiles(root);
@@ -444,18 +448,35 @@ export function scanRepository(root) {
       failures.push(`Symbolic links are not allowed: ${normalized}`);
       continue;
     }
-    if (!stat.isFile() || stat.size > 2_000_000) continue;
+    if (!stat.isFile()) continue;
+    // Neither size nor a NUL byte is evidence that a file holds no credential.
+    // A file too large to read is refused rather than waved through, and a file
+    // with NUL bytes is decoded as UTF-16 in both byte orders as well, which is
+    // how a credential file exported from a Windows tool would be stored.
+    if (stat.size > maxScanBytes) {
+      failures.push(`Tracked file is too large for the guard to scan: ${normalized}`);
+      continue;
+    }
 
     const buffer = readFileSync(absolute);
-    if (looksBinary(buffer)) continue;
     const text = buffer.toString("utf8");
+    const readings = [text];
+    if (buffer.includes(0) && buffer.length % 2 === 0) {
+      readings.push(buffer.toString("utf16le"));
+      const swapped = Buffer.from(buffer);
+      swapped.swap16();
+      readings.push(swapped.toString("utf16le"));
+    }
 
-    for (const [label, pattern] of SECRET_PATTERNS) {
-      if (pattern.test(text)) failures.push(`Possible ${label} in ${normalized}`);
+    for (const reading of readings) {
+      for (const [label, pattern] of SECRET_PATTERNS) {
+        if (pattern.test(reading)) failures.push(`Possible ${label} in ${normalized}`);
+      }
+      if (PERSONAL_PATH_PATTERNS.some((pattern) => pattern.test(reading))) {
+        failures.push(`Personal absolute path in ${normalized}`);
+      }
     }
-    if (PERSONAL_PATH_PATTERNS.some((pattern) => pattern.test(text))) {
-      failures.push(`Personal absolute path in ${normalized}`);
-    }
+
     if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(normalized)) {
       failures.push(...validateWorkflowText(normalized, text));
     }

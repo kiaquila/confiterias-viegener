@@ -7,6 +7,7 @@ import test from "node:test";
 
 import {
   permissionBlocks,
+  scanRepository,
   workflowActions,
   reachableFromPullRequest,
   unreachableFromPullRequest,
@@ -599,6 +600,74 @@ test("YAML features the reader does not implement make a workflow unreadable", (
     ),
     []
   );
+});
+
+test("a quoted key carrying escapes is refused, not read literally", () => {
+  // YAML decodes escapes in double-quoted keys, so GitHub reads these as
+  // `permissions` and `uses` while no plain spelling matches them.
+  const escaped = workflow([
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    '    "permiss\\u0069ons":',
+    "      contents: write",
+    "    steps:",
+    '      - "us\\u0065s": actions/checkout@v4'
+  ]);
+  assert.equal(reachableFromPullRequest(escaped), true);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", escaped).join("\n"),
+    /permissions could not be read/
+  );
+
+  // A quoted key without escapes still reads normally.
+  assert.deepEqual(
+    validateWorkflowText(
+      ".github/workflows/example.yml",
+      workflow(["on:", "  push:", '"permissions":', "  contents: read"])
+    ),
+    []
+  );
+});
+
+test("size and NUL bytes do not excuse a file from the secret scan", () => {
+  const token = `ghp_${"A".repeat(32)}`;
+
+  withFixture((root) => {
+    // A credential file exported as UTF-16 reads as binary in UTF-8.
+    writeFileSync(join(root, "website/utf16.txt"), Buffer.from(`${token}\n`, "utf16le"));
+    git(root, "add", "-f", "website/utf16.txt");
+    const result = runGuard(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Possible GitHub token in website\/utf16\.txt/);
+  });
+
+  withFixture((root) => {
+    // A NUL byte no longer ends the search through the rest of the file.
+    writeFileSync(join(root, "website/padded.txt"), Buffer.concat([
+      Buffer.from([0, 0]),
+      Buffer.from(`${token}\n`, "utf8")
+    ]));
+    git(root, "add", "-f", "website/padded.txt");
+    const result = runGuard(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Possible GitHub token in website\/padded\.txt/);
+  });
+
+  withFixture((root) => {
+    // A file too large to scan is refused rather than waved through.
+    writeFileSync(join(root, "website/large.txt"), `${token}\n`);
+    git(root, "add", "-f", "website/large.txt");
+    const { failures } = scanRepository(root, { maxScanBytes: 8 });
+    assert.ok(
+      failures.some((failure) => /too large for the guard to scan: website\/large\.txt/.test(failure)),
+      failures.join("\n")
+    );
+  });
 });
 
 test("rejects write-all workflow permissions", () => {
