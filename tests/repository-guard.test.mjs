@@ -154,6 +154,20 @@ test("CI runs the guard from the default branch, not from the proposed copy", ()
     workflow,
     /node \.guard-trusted\/scripts\/check-repository\.mjs --root "\$GITHUB_WORKSPACE"/
   );
+
+  // Cutover branch: the trusted guard still judges the proposed bytes, on a
+  // scratch tree that only restores what this pull request removes.
+  assert.match(
+    workflow,
+    /node \.guard-trusted\/scripts\/check-repository\.mjs --root "\$compat"/
+  );
+  assert.match(workflow, /git worktree add --detach "\$compat" FETCH_HEAD/);
+  assert.match(workflow, /git -C "\$compat" checkout "\$HEAD_SHA" -- \./);
+  assert.doesNotMatch(
+    workflow.slice(workflow.indexOf("Run the repository safety guard")),
+    /^\s*node scripts\/check-repository\.mjs\s*$\n\s*exit 0/m,
+    "the proposed guard must never be the only guard that runs"
+  );
 });
 
 test("rejects write-all workflow permissions", () => {
