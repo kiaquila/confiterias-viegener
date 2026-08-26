@@ -572,6 +572,24 @@ test("a job field the reader cannot name is refused, not skipped", () => {
   assert.match(failures.join("\n"), /permissions could not be read.*job build/);
 });
 
+test("a flow-style step is refused rather than left unchecked", () => {
+  const flow = workflow([
+    "on:",
+    "  push:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - { uses: actions/checkout@v4 }"
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", flow).join("\n"),
+    /permissions could not be read/
+  );
+});
+
 test("YAML features the reader does not implement make a workflow unreadable", () => {
   for (const line of ["    <<: *defaults", "    runs-on: *runner"]) {
     const text = workflow([
@@ -656,6 +674,23 @@ test("size and NUL bytes do not excuse a file from the secret scan", () => {
     const result = runGuard(root);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Possible GitHub token in website\/padded\.txt/);
+  });
+
+  withFixture((root) => {
+    // UTF-32 in both byte orders, which two-byte decoding never made contiguous.
+    const utf32le = Buffer.concat(
+      [...`${token}\n`].map((char) => Buffer.from([char.charCodeAt(0), 0, 0, 0]))
+    );
+    const utf32be = Buffer.concat(
+      [...`${token}\n`].map((char) => Buffer.from([0, 0, 0, char.charCodeAt(0)]))
+    );
+    writeFileSync(join(root, "website/utf32le.txt"), utf32le);
+    writeFileSync(join(root, "website/utf32be.txt"), utf32be);
+    git(root, "add", "-f", "website/utf32le.txt", "website/utf32be.txt");
+    const result = runGuard(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Possible GitHub token in website\/utf32le\.txt/);
+    assert.match(result.stderr, /Possible GitHub token in website\/utf32be\.txt/);
   });
 
   withFixture((root) => {

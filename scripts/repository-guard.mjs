@@ -130,7 +130,10 @@ const UNSUPPORTED_YAML = [
   // A double-quoted key decodes escapes, so `"permiss\\u0069ons":` is the
   // permissions key to GitHub but not to any spelling this reader matches.
   // Decoding YAML escapes is out of scope; refusing them is not.
-  [/^"[^"]*\\[^"]*"\s*:/, "escaped key"]
+  [/^"[^"]*\\[^"]*"\s*:/, "escaped key"],
+  // A flow-style step hides its keys from a line-oriented reader, so
+  // `- { uses: actions/checkout@v4 }` would never be checked for a SHA pin.
+  [/^-\s*\{/, "flow-style sequence item"]
 ];
 
 function lineModel(text) {
@@ -461,15 +464,14 @@ export function scanRepository(root, { maxScanBytes = MAX_SCAN_BYTES } = {}) {
 
     const buffer = readFileSync(absolute);
     const text = buffer.toString("utf8");
-    const readings = [text];
+    // Scanning reads bytes as latin1 so no byte is lost to a replacement
+    // character, and a file holding NUL bytes is scanned again with them
+    // removed. That one reading covers UTF-16 and UTF-32 in either byte order,
+    // and any other NUL padding, without the guard having to enumerate
+    // encodings it will always be one short of.
+    const readings = [buffer.toString("latin1")];
     if (buffer.includes(0)) {
-      // A trailing odd byte is padding, not a reason to stop decoding the pairs
-      // that precede it.
-      const pairs = buffer.length % 2 === 0 ? buffer : buffer.subarray(0, buffer.length - 1);
-      readings.push(pairs.toString("utf16le"));
-      const swapped = Buffer.from(pairs);
-      swapped.swap16();
-      readings.push(swapped.toString("utf16le"));
+      readings.push(buffer.filter((byte) => byte !== 0).toString("latin1"));
     }
 
     for (const reading of readings) {
