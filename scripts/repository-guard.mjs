@@ -55,6 +55,7 @@ const FORBIDDEN_NAMES = [
 const SECRET_PATTERNS = [
   ["private key", /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/],
   ["GitHub token", /gh[pousr]_[A-Za-z0-9]{20,}/],
+  ["fine-grained GitHub token", /github_pat_[A-Za-z0-9_]{20,}/],
   ["OpenAI-style API key", /sk-[A-Za-z0-9_-]{32,}/],
   ["Slack token", /xox[baprs]-[A-Za-z0-9-]{20,}/],
   ["AWS access key", /AKIA[0-9A-Z]{16}/],
@@ -461,9 +462,12 @@ export function scanRepository(root, { maxScanBytes = MAX_SCAN_BYTES } = {}) {
     const buffer = readFileSync(absolute);
     const text = buffer.toString("utf8");
     const readings = [text];
-    if (buffer.includes(0) && buffer.length % 2 === 0) {
-      readings.push(buffer.toString("utf16le"));
-      const swapped = Buffer.from(buffer);
+    if (buffer.includes(0)) {
+      // A trailing odd byte is padding, not a reason to stop decoding the pairs
+      // that precede it.
+      const pairs = buffer.length % 2 === 0 ? buffer : buffer.subarray(0, buffer.length - 1);
+      readings.push(pairs.toString("utf16le"));
+      const swapped = Buffer.from(pairs);
       swapped.swap16();
       readings.push(swapped.toString("utf16le"));
     }

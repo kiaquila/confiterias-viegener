@@ -659,6 +659,28 @@ test("size and NUL bytes do not excuse a file from the secret scan", () => {
   });
 
   withFixture((root) => {
+    // A trailing padding byte makes the length odd; the pairs before it still
+    // decode.
+    writeFileSync(join(root, "website/odd.txt"), Buffer.concat([
+      Buffer.from(`${token}\n`, "utf16le"),
+      Buffer.from([0x00])
+    ]));
+    git(root, "add", "-f", "website/odd.txt");
+    const result = runGuard(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Possible GitHub token in website\/odd\.txt/);
+  });
+
+  withFixture((root) => {
+    // A fine-grained personal access token uses a different prefix entirely.
+    writeFileSync(join(root, "website/fine.txt"), `github_pat_${"B".repeat(40)}\n`);
+    git(root, "add", "-f", "website/fine.txt");
+    const result = runGuard(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Possible fine-grained GitHub token in website\/fine\.txt/);
+  });
+
+  withFixture((root) => {
     // A file too large to scan is refused rather than waved through.
     writeFileSync(join(root, "website/large.txt"), `${token}\n`);
     git(root, "add", "-f", "website/large.txt");
