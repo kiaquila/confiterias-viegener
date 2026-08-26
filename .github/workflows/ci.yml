@@ -62,18 +62,32 @@ jobs:
           # guard, which requires the .web-design files this pull request
           # deletes, so running it on the proposed tree would fail for the wrong
           # reason. Run that trusted guard unmodified against a scratch tree that
-          # is the default branch with this head laid over it: every proposed
-          # byte is still scanned by trusted policy, and the only thing excused
-          # is the absence of the retired files. The proposed guard runs too, so
-          # a deletion the compatibility tree restores is still caught.
+          # is the proposed head with only the retired paths restored. The tree
+          # starts from the proposal, so every proposed change — additions,
+          # edits and deletions alike — is judged by trusted policy; the named
+          # allowlist below is the only thing excused, and it is exactly what
+          # this pull request retires.
           echo "::warning::Cutover: the default branch still carries the retired baseline guard, so it is run against a compatibility tree. This branch disappears once this pull request merges."
           git fetch --no-tags --depth=1 origin "$DEFAULT_BRANCH"
           compat="$RUNNER_TEMP/guard-compat"
           rm -rf "$compat"
-          git worktree add --detach "$compat" FETCH_HEAD
-          git -C "$compat" checkout "$HEAD_SHA" -- .
+          git worktree add --detach "$compat" "$HEAD_SHA"
+          git -C "$compat" checkout FETCH_HEAD -- \
+            .web-design \
+            .github/workflows/baseline-source-verification.yml \
+            .github/workflows/osv-scan.yml \
+            .github/workflows/repository-guard.yml \
+            .github/workflows/web-design-update.yml \
+            docs/operations/bootstrap.md \
+            docs/operations/github-setup.md \
+            docs/operations/updates.md \
+            scripts/build-release-manifest.mjs \
+            scripts/check-baseline-change.mjs \
+            scripts/check-managed-files.mjs \
+            scripts/run-project-checks.mjs \
+            scripts/sync-project.mjs \
+            scripts/test-web-design.mjs
           node .guard-trusted/scripts/check-repository.mjs --root "$compat"
-          node scripts/check-repository.mjs
 
       - name: Test the repository safety guard and the Codex gate
         run: node --test "tests/*.test.mjs"

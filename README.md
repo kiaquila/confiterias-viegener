@@ -146,8 +146,9 @@ project's own files are the only source of truth for its guard, CI and docs.
 | Piece | What it is |
 | --- | --- |
 | [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) | The single CI: the website build and tests, the repository safety guard, and the OSV dependency scan |
-| [`scripts/check-repository.mjs`](./scripts/check-repository.mjs) | The safety guard — no tracked secrets, `.env` files, personal paths, symlinks, dependency directories or build output, and least-privilege workflows with SHA-pinned actions. CI runs the copy on `main`, not the proposed one, so a pull request cannot weaken the policy that is judging it. Until `main` drops the retired baseline guard, that trusted copy is run against a compatibility tree — the default branch with the proposed head laid over it — so the proposed bytes are still judged by trusted policy |
+| [`scripts/check-repository.mjs`](./scripts/check-repository.mjs) | The safety guard — no tracked secrets, `.env` files, personal paths, symlinks, dependency directories or build output, and least-privilege workflows with SHA-pinned actions. CI runs the copy on `main`, not the proposed one. A pull request can still edit `ci.yml`, so `trusted-repository-guard` below is the check that actually enforces this |
 | [`tests/`](./tests/) | Regression tests for the guard and for the Codex review gate |
+| [`.github/workflows/trusted-repository-guard.yml`](./.github/workflows/trusted-repository-guard.yml) | The immutable half of the guard: a `workflow_run` job that always executes the default branch's copy of itself and of the guard, and publishes the verdict as a check bound to the pull-request head |
 | `.github/workflows/codex-review*.yml` | The current-head Codex review gate |
 
 `kiaquila/web-design` is a **manual example to read from, not an upstream to

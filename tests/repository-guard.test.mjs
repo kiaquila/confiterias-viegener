@@ -156,18 +156,44 @@ test("CI runs the guard from the default branch, not from the proposed copy", ()
   );
 
   // Cutover branch: the trusted guard still judges the proposed bytes, on a
-  // scratch tree that only restores what this pull request removes.
+  // scratch tree that starts from the proposed head — so proposed deletions are
+  // judged too — and restores only the paths this pull request retires.
   assert.match(
     workflow,
     /node \.guard-trusted\/scripts\/check-repository\.mjs --root "\$compat"/
   );
-  assert.match(workflow, /git worktree add --detach "\$compat" FETCH_HEAD/);
-  assert.match(workflow, /git -C "\$compat" checkout "\$HEAD_SHA" -- \./);
+  assert.match(workflow, /git worktree add --detach "\$compat" "\$HEAD_SHA"/);
+  assert.match(workflow, /git -C "\$compat" checkout FETCH_HEAD -- \\\n\s+\.web-design\b/);
   assert.doesNotMatch(
-    workflow.slice(workflow.indexOf("Run the repository safety guard")),
-    /^\s*node scripts\/check-repository\.mjs\s*$\n\s*exit 0/m,
-    "the proposed guard must never be the only guard that runs"
+    workflow,
+    /checkout FETCH_HEAD -- \.\s*$/m,
+    "the compatibility tree must restore a named allowlist, never the whole tree"
   );
+  assert.doesNotMatch(
+    workflow,
+    /^\s*node scripts\/check-repository\.mjs\s*$/m,
+    "the proposed copy of the guard must never be what judges a pull request"
+  );
+});
+
+test("an immutable workflow_run job judges the head with the default branch's guard", () => {
+  const workflow = readFileSync(
+    join(repositoryRoot, ".github/workflows/trusted-repository-guard.yml"),
+    "utf8"
+  );
+  // `workflow_run` always executes the default branch's copy, so a pull request
+  // that edits ci.yml cannot remove this check.
+  assert.match(workflow, /^on:\n\s+workflow_run:/m);
+  assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
+  assert.match(workflow, /ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/);
+  assert.match(
+    workflow,
+    /node "\$GITHUB_WORKSPACE\/scripts\/check-repository\.mjs" \\\n\s+--root "\$GITHUB_WORKSPACE\/\.guard-proposed"/
+  );
+  // Fails closed when the completed run is no longer the pull request's head.
+  assert.match(workflow, /RUN_HEAD_SHA" != "\$ASSOCIATED_HEAD_SHA"/);
+  assert.match(workflow, /-f name=trusted-repository-guard/);
+  assert.match(workflow, /-f head_sha="\$HEAD_SHA"/);
 });
 
 test("rejects write-all workflow permissions", () => {

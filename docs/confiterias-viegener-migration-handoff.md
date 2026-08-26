@@ -74,7 +74,10 @@ closeout work.
 
 That requirement is gone, because the model it belonged to is gone. The control
 plane was removed and replaced by a minimal project-owned setup: one CI
-workflow, one repository safety guard with its own tests, and the OSV scan.
+workflow, one repository safety guard with its own tests, the OSV scan, and one
+immutable `workflow_run` job that re-runs the default branch's guard against the
+pull-request head so the guard cannot be edited away by the pull request it is
+judging.
 `kiaquila/web-design` is now a manual example to read from, never an upstream
 that this repository pins, syncs with or verifies against. No provisional
 baseline pin remains, and no future release or sync model is owed.
@@ -96,8 +99,10 @@ Until it is applied, maintainers enforce these controls manually:
 1. Make every future change on a focused branch and ready-for-review pull
    request; do not push directly to `main`.
 2. Review the exact current head and the Code Owner paths before merge.
-3. Require `project-ci`, `osv-scan` and a current-head `Codex Review` to be
-   successful.
+3. Require `project-ci`, `osv-scan`, `trusted-repository-guard` and a
+   current-head `Codex Review` to be successful. `trusted-repository-guard` is
+   published against the pull-request head by a trusted default-branch
+   `workflow_run`, so register it only after its first successful run.
 4. Record two unchanged-head green snapshots at least 120 seconds apart before
    merge.
 5. Do not force-push or delete `main`, and resolve conversations before merge.
@@ -265,7 +270,8 @@ does not chase it.
   `confiterias-viegener build token v2` is not bound to Builds and is queued
   for deletion pending the owner's confirmation; deleting it rotates nothing.
 - Apply branch protection to `main` now that the repository is public and the
-  feature is available, requiring `project-ci`, `osv-scan` and `Codex Review`.
+  feature is available, requiring `project-ci`, `osv-scan`,
+  `trusted-repository-guard` and `Codex Review`.
 - Decide the final visibility. Public is the accepted migration-time state, not
   a permanent one; returning to private means accepting that Actions stop once
   the included allowance is spent, so that decision and its consequence belong
