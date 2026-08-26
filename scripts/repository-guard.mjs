@@ -101,76 +101,110 @@ function looksBinary(buffer) {
   return buffer.subarray(0, Math.min(buffer.length, 8192)).includes(0);
 }
 
-function meaningful(line) {
-  return line.trim() !== "" && !/^\s*#/.test(line);
+// A hand-written parser cannot be trusted to understand every YAML spelling, so
+// it never guesses: anything it cannot classify is reported, or treated as the
+// dangerous case. `null` from any of these means "unparseable", never "empty".
+
+function isComment(line) {
+  return /^\s*#/.test(line);
 }
 
-// The trigger names a workflow declares, from either `on: push`, `on: [a, b]`
-// or a block `on:` mapping.
+function isBlank(line) {
+  return line.trim() === "";
+}
+
+const TRIGGER_NAME = /^[a-z_]+$/;
+
+// The trigger names a workflow declares, or `null` when the `on:` section is
+// written in a form this parser does not handle — a flow mapping, an anchor, a
+// merge key. Callers must treat `null` as "could be anything".
 export function workflowTriggers(text) {
+  const lines = text.split("\n").map((line) => line.replace(/\s+$/, ""));
+  const index = lines.findIndex((line) => /^(?:on|'on'|"on"):/.test(line));
+  if (index === -1) return null;
+
   const triggers = new Set();
-  let inOn = false;
-  for (const raw of text.split("\n")) {
-    const line = raw.replace(/\s+$/, "");
-    if (!meaningful(line)) continue;
-    const inline = line.match(/^on:\s*(\S.*)$/);
-    if (inline) {
-      inOn = false;
-      const value = inline[1].trim();
-      if (value.startsWith("[")) {
-        for (const name of value.replace(/[[\]]/g, "").split(",")) triggers.add(name.trim());
-      } else {
-        triggers.add(value);
-      }
+  const inline = lines[index].match(/^(?:on|'on'|"on"):\s*(\S.*?)\s*(?:#.*)?$/);
+  if (inline) {
+    const value = inline[1];
+    if (TRIGGER_NAME.test(value)) return new Set([value]);
+    const sequence = value.match(/^\[\s*([a-z_]+(?:\s*,\s*[a-z_]+)*)\s*\]$/);
+    if (!sequence) return null;
+    for (const name of sequence[1].split(",")) triggers.add(name.trim());
+    return triggers;
+  }
+
+  for (let i = index + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (isBlank(line) || isComment(line)) continue;
+    const measured = line.match(/^( *)(\S.*)$/);
+    if (!measured) continue;
+    const indent = measured[0].length - measured[2].length;
+    if (indent === 0) break;
+    if (indent > 2) continue; // options of a trigger already recorded
+    const key = measured[2].match(/^([a-z_]+):(?:\s*(?:#.*)?)?$/);
+    if (key) {
+      triggers.add(key[1]);
       continue;
     }
-    if (/^on:\s*$/.test(line)) {
-      inOn = true;
+    const item = measured[2].match(/^-\s+([a-z_]+)\s*(?:#.*)?$/);
+    if (item) {
+      triggers.add(item[1]);
       continue;
     }
-    if (!inOn) continue;
-    if (/^\S/.test(line)) {
-      inOn = false;
-      continue;
-    }
-    const key = line.match(/^ {2}([A-Za-z_][A-Za-z0-9_]*):/);
-    if (key) triggers.add(key[1]);
-    const item = line.match(/^ {2}- +([A-Za-z_][A-Za-z0-9_]*)\s*$/);
-    if (item) triggers.add(item[1]);
+    return null; // something this parser does not understand
   }
   return triggers;
 }
 
+// `pull_request` and `pull_request_target` execute the proposal's own workflow
+// definition. Anything this parser cannot prove otherwise counts as reachable.
+export function reachableFromPullRequest(text) {
+  const triggers = workflowTriggers(text);
+  if (!triggers) return true;
+  return triggers.has("pull_request") || triggers.has("pull_request_target");
+}
+
+// Reads one `permissions:` mapping. Comments and blank lines inside the mapping
+// are skipped, trailing comments on an entry are allowed, and anything else —
+// a nested structure, a flow mapping, an entry shape this parser does not
+// recognise — returns `null` so the caller can refuse the workflow outright.
+function readPermissionEntries(lines, start, indent) {
+  const entries = [];
+  for (let i = start; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (isBlank(line) || isComment(line)) continue;
+    const measured = line.match(/^( *)(\S.*)$/);
+    if (!measured) continue;
+    const actual = measured[1].length;
+    if (actual < indent) break;
+    if (actual > indent) return null;
+    const pair = measured[2].match(/^([a-z-]+):\s*([A-Za-z-]+)\s*(?:#.*)?$/);
+    if (!pair) return null;
+    entries.push([pair[1], pair[2]]);
+  }
+  return entries;
+}
+
 // Every `permissions:` mapping in the file — the top-level one and each job's —
-// together with the job's `if:` guard, which is what decides whether a job can
-// be reached by a proposed pull-request event at all.
+// with the job's `if:` guard, which is what decides whether a pull-request event
+// can reach that job at all. A block that could not be read carries
+// `entries: null`.
 export function permissionBlocks(text) {
   const lines = text.split("\n").map((line) => line.replace(/\s+$/, ""));
   const blocks = [];
   let inJobs = false;
   let job = null;
 
-  const readEntries = (start, indent) => {
-    const entries = [];
-    for (let i = start; i < lines.length; i += 1) {
-      const entry = lines[i];
-      if (!meaningful(entry)) break;
-      const pair = entry.match(new RegExp(`^ {${indent}}([a-z-]+):\\s*(\\S+)\\s*$`));
-      if (!pair) break;
-      entries.push([pair[1], pair[2].replace(/^["']|["']$/g, "")]);
-    }
-    return entries;
-  };
-
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    if (!meaningful(line)) continue;
+    if (isBlank(line) || isComment(line)) continue;
 
     if (/^jobs:\s*$/.test(line)) {
       inJobs = true;
       continue;
     }
-    if (/^\S/.test(line) && !/^jobs:/.test(line)) {
+    if (/^\S/.test(line)) {
       inJobs = false;
       job = null;
     }
@@ -192,18 +226,28 @@ export function permissionBlocks(text) {
     }
 
     if (/^permissions:\s*$/.test(line)) {
-      blocks.push({ scope: "top", job: null, guard: "", entries: readEntries(i + 1, 2) });
+      blocks.push({ scope: "top", job: null, guard: "", entries: readPermissionEntries(lines, i + 1, 2) });
     } else if (inJobs && job && /^ {4}permissions:\s*$/.test(line)) {
-      blocks.push({ scope: "job", job: job.name, guard: job.guard, entries: readEntries(i + 1, 6) });
+      blocks.push({
+        scope: "job",
+        job: job.name,
+        guard: job.guard,
+        entries: readPermissionEntries(lines, i + 1, 6)
+      });
     }
   }
   return blocks;
 }
 
-// A job whose `if:` demands some other event can never run on a pull-request
-// event, so its write scopes are not reachable from proposed code.
-function unreachableFromPullRequest(guard) {
-  return /github\.event_name\s*==\s*'(?!pull_request')[a-z_]+'/.test(guard);
+// A job is exempt only when its condition provably cannot hold for a
+// pull-request event: no disjunction, no mention of pull_request, and at least
+// one positive `github.event_name ==` test for some other event. Anything more
+// involved is left unexempt rather than reasoned about.
+export function unreachableFromPullRequest(guard) {
+  if (!guard || /\|\|/.test(guard)) return false;
+  if (/\bpull_request\b/.test(guard) || /\bpull_request_target\b/.test(guard)) return false;
+  if (/!=/.test(guard)) return false;
+  return /github\.event_name\s*==\s*'[a-z_]+'/.test(guard);
 }
 
 export function validateWorkflowText(path, text) {
@@ -220,22 +264,30 @@ export function validateWorkflowText(path, text) {
 
   // `pull_request` runs the proposal's own workflow definition. Any write scope
   // it can reach hands a write-capable token to proposed code, so granular
-  // grants are refused there just as `write-all` is. Events that always run the
-  // default branch's definition — workflow_run, issue_comment, schedule,
-  // workflow_dispatch — may hold write scopes.
-  if (workflowTriggers(text).has("pull_request")) {
-    for (const block of permissionBlocks(text)) {
-      if (block.scope === "job" && unreachableFromPullRequest(block.guard)) continue;
-      for (const [scope, value] of block.entries) {
-        if (!/^(write|write-all)$/.test(value)) continue;
-        const where = block.scope === "top" ? "top-level" : `job ${block.job}`;
-        failures.push(
-          `Write permission ${scope}: ${value} is reachable from proposed ` +
-            `pull-request code in ${path} (${where})`
-        );
-      }
+  // grants are refused there just as `write-all` is. Events that always execute
+  // the default branch's definition — workflow_run, issue_comment,
+  // pull_request_review, schedule, workflow_dispatch — may hold write scopes.
+  const proposed = reachableFromPullRequest(text);
+  for (const block of permissionBlocks(text)) {
+    const where = block.scope === "top" ? "top-level" : `job ${block.job}`;
+    if (block.entries === null) {
+      failures.push(
+        `Workflow permissions could not be read in ${path} (${where}); ` +
+          `write them as plain "scope: value" lines`
+      );
+      continue;
+    }
+    if (!proposed) continue;
+    if (block.scope === "job" && unreachableFromPullRequest(block.guard)) continue;
+    for (const [scope, value] of block.entries) {
+      if (!/^(write|write-all)$/.test(value)) continue;
+      failures.push(
+        `Write permission ${scope}: ${value} is reachable from proposed ` +
+          `pull-request code in ${path} (${where})`
+      );
     }
   }
+
   for (const match of text.matchAll(/^\s*-?\s*uses:\s*["']?([^\s"']+)["']?\s*(?:#.*)?$/gm)) {
     const action = match[1];
     if (action.startsWith("./") || action.startsWith("docker://")) continue;

@@ -5,7 +5,13 @@ import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { permissionBlocks, validateWorkflowText, workflowTriggers } from "../scripts/repository-guard.mjs";
+import {
+  permissionBlocks,
+  reachableFromPullRequest,
+  unreachableFromPullRequest,
+  validateWorkflowText,
+  workflowTriggers
+} from "../scripts/repository-guard.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const guardScript = join(repositoryRoot, "scripts/repository-guard.mjs");
@@ -279,6 +285,103 @@ test("triggers and permission blocks are read from real workflow shapes", () => 
     ["job", "one"]
   ]);
   assert.match(blocks[1].guard, /workflow_dispatch/);
+});
+
+test("trigger syntax the parser cannot classify counts as pull-request reachable", () => {
+  // YAML reads a bare `on` as a boolean, so quoting it is valid and common.
+  assert.equal(reachableFromPullRequest(workflow(["'on': [pull_request]", "permissions:"])), true);
+  assert.equal(reachableFromPullRequest(workflow(['"on": [push]', "permissions:"])), false);
+  // A flow mapping is valid YAML this parser does not read: fail closed.
+  assert.equal(workflowTriggers(workflow(["on: {pull_request: {}}"])), null);
+  assert.equal(reachableFromPullRequest(workflow(["on: {pull_request: {}}"])), true);
+  // No `on:` at all is equally unclassifiable.
+  assert.equal(reachableFromPullRequest(workflow(["permissions:", "  contents: read"])), true);
+
+  const failures = validateWorkflowText(
+    ".github/workflows/example.yml",
+    workflow([
+      "on: {pull_request: {}}",
+      "permissions:",
+      "  contents: write",
+      "jobs:",
+      "  build:",
+      "    runs-on: ubuntu-latest",
+      "    steps:",
+      "      - run: true"
+    ])
+  );
+  assert.match(failures.join("\n"), /Write permission contents: write is reachable/);
+});
+
+test("a permission mapping is read whole, comments and all", () => {
+  const entries = permissionBlocks(
+    workflow([
+      "permissions:",
+      "  actions: write",
+      "  contents: read",
+      "  # GITHUB_TOKEN needs this spelled out.",
+      "",
+      "  pull-requests: write # publish",
+      "jobs:",
+      "  build:"
+    ])
+  )[0].entries;
+  assert.deepEqual(entries, [
+    ["actions", "write"],
+    ["contents", "read"],
+    ["pull-requests", "write"]
+  ]);
+});
+
+test("an unreadable permission mapping is refused, not silently skipped", () => {
+  const failures = validateWorkflowText(
+    ".github/workflows/example.yml",
+    workflow([
+      "on:",
+      "  pull_request:",
+      "permissions:",
+      "  contents: read",
+      "  checks:",
+      "    nested: write",
+      "jobs:",
+      "  build:"
+    ])
+  );
+  assert.match(failures.join("\n"), /permissions could not be read .*top-level/);
+});
+
+test("a job is exempt only when its condition cannot hold for a pull request", () => {
+  assert.equal(unreachableFromPullRequest("github.event_name == 'workflow_dispatch'"), true);
+  // A disjunction that also admits pull_request must never be exempt.
+  assert.equal(
+    unreachableFromPullRequest(
+      "github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'"
+    ),
+    false
+  );
+  assert.equal(unreachableFromPullRequest("github.event_name != 'pull_request'"), false);
+  assert.equal(unreachableFromPullRequest("github.event.pull_request.draft == false"), false);
+  assert.equal(unreachableFromPullRequest(""), false);
+
+  const failures = validateWorkflowText(
+    ".github/workflows/example.yml",
+    workflow([
+      "on:",
+      "  pull_request:",
+      "  workflow_dispatch:",
+      "permissions:",
+      "  contents: read",
+      "jobs:",
+      "  either:",
+      "    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'",
+      "    runs-on: ubuntu-latest",
+      "    permissions:",
+      "      checks: write",
+      "    steps:",
+      "      - run: true"
+    ])
+  );
+  assert.match(failures.join("\n"), /Write permission checks: write is reachable.*job either/);
 });
 
 test("rejects write-all workflow permissions", () => {
