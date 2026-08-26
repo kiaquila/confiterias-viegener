@@ -9,6 +9,7 @@ import {
   permissionBlocks,
   scanRepository,
   workflowActions,
+  workflowJobNames,
   reachableFromPullRequest,
   unreachableFromPullRequest,
   validateWorkflowText,
@@ -672,6 +673,98 @@ test("the trusted check name and the workflow it keys off are reserved", () => {
       ])
     ),
     []
+  );
+});
+
+test("the trusted name is refused wherever a pull request could publish it", () => {
+  // Turning the verifier's own file into a pull-request workflow is how a
+  // proposal would publish the trusted check for itself.
+  const hijacked = workflow([
+    "name: Trusted Repository Guard",
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  verify:",
+    "    name: trusted-repository-guard",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: true"
+  ]);
+  const failures = validateWorkflowText(
+    ".github/workflows/trusted-repository-guard.yml",
+    hijacked
+  );
+  assert.match(failures.join("\n"), /may not be reachable from pull-request events/);
+  assert.match(failures.join("\n"), /Only the immutable .* may publish/);
+});
+
+test("a job name the reader cannot resolve is refused, not recorded raw", () => {
+  // A block scalar keeps the text on the following line.
+  const blockScalar = workflow([
+    "name: Project CI",
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  spoof:",
+    "    name: >-",
+    "      trusted-repository-guard",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: true"
+  ]);
+  assert.equal(workflowJobNames(blockScalar), null);
+  assert.match(
+    validateWorkflowText(".github/workflows/ci.yml", blockScalar).join("\n"),
+    /jobs could not be read/
+  );
+
+  // YAML allows whitespace before the colon, and that is still the name key.
+  const spaced = workflow([
+    "name: Project CI",
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  spoof:",
+    "    name : trusted-repository-guard",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: true"
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/ci.yml", spaced).join("\n"),
+    /Only the immutable .* may publish/
+  );
+});
+
+test("an action step is read or refused, never ignored", () => {
+  // `uses : value` is the uses key with whitespace before the colon.
+  assert.deepEqual(
+    workflowActions(workflow(["    steps:", "      - uses : actions/checkout@v4"])),
+    ["actions/checkout@v4"]
+  );
+
+  // An explicit key inside a sequence item is refused.
+  const explicitStep = workflow([
+    "on:",
+    "  push:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - ? uses",
+    "        : actions/checkout@v4"
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", explicitStep).join("\n"),
+    /could not be read/
   );
 });
 

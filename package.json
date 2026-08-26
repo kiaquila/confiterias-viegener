@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "check": "node scripts/check-repository.mjs && node scripts/check-managed-files.mjs",
-    "test": "node scripts/test-web-design.mjs",
+    "test": "node scripts/test-web-design.mjs && node --test \"tests/repository-guard.test.mjs\"",
     "preflight": "npm run check && npm test",
     "setup": "node scripts/bootstrap-project.mjs",
     "project:check": "node scripts/run-project-checks.mjs",

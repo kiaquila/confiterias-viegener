@@ -43,6 +43,9 @@ jobs:
         with:
           node-version: "22.18.0"
 
+      - name: Test the default branch's guard before judging with it
+        run: node --test "tests/repository-guard.test.mjs"
+
       - name: Judge the proposed head with the default branch's guard
         id: guard
         shell: bash

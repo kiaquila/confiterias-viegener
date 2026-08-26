@@ -116,7 +116,7 @@ function strip(content) {
 
 // `key:`, `'key':` and `"key":` are the same key.
 function keyOf(content) {
-  const match = strip(content).match(/^(?:([A-Za-z0-9_-]+)|'([^']+)'|"([^"]+)"):(.*)$/);
+  const match = strip(content).match(/^(?:([A-Za-z0-9_-]+)|'([^']+)'|"([^"]+)")\s*:(.*)$/);
   if (!match) return null;
   return { name: match[1] ?? match[2] ?? match[3], value: match[4].trim() };
 }
@@ -134,7 +134,7 @@ const UNSUPPORTED_YAML = [
   // An explicit mapping entry puts its key on its own line after `?`, so the
   // key this reader would classify is not where it looks — and the key may be
   // quoted and escaped on top of that.
-  [/^\?(?:\s|$)/, "explicit mapping key"],
+  [/^(?:-\s*)?\?(?:\s|$)/, "explicit mapping key"],
   // A flow-style step hides its keys from a line-oriented reader, so
   // `- { uses: actions/checkout@v4 }` would never be checked for a SHA pin.
   // YAML properties may sit between the sequence marker and the mapping, as in
@@ -394,9 +394,11 @@ export function workflowJobNames(text) {
       const inner = model[j];
       if (inner.skip || inner.indent !== keyIndent) continue;
       const key = keyOf(inner.content);
-      if (key?.name === "name" && key.value) {
-        names.push(key.value.replace(/^["']|["']$/g, ""));
-      }
+      if (key?.name !== "name") continue;
+      // A block scalar keeps the text on following lines, so the value here
+      // would be the marker rather than the name. Refuse rather than record it.
+      if (!key.value || /^[|>]/.test(key.value)) return null;
+      names.push(key.value.replace(/^["']|["']$/g, ""));
     }
   }
   return names;
@@ -450,13 +452,23 @@ export function validateWorkflowText(path, text) {
   // Project CI would stop the trusted verifier's workflow_run from firing, and
   // a proposed job carrying the trusted name would then be the only success
   // reported under a required check that never actually ran.
-  if (path !== TRUSTED_GUARD_WORKFLOW) {
-    const jobNames = workflowJobNames(text);
-    if (jobNames === null) {
-      failures.push(`Workflow jobs could not be read in ${path}`);
-    } else if (jobNames.includes(TRUSTED_GUARD_CHECK)) {
+  if (path === TRUSTED_GUARD_WORKFLOW && proposed) {
+    failures.push(
+      `${TRUSTED_GUARD_WORKFLOW} may not be reachable from pull-request events; ` +
+        `it is the check a proposal must not be able to publish for itself`
+    );
+  }
+  const jobNames = workflowJobNames(text);
+  if (jobNames === null) {
+    failures.push(`Workflow jobs could not be read in ${path}`);
+  } else if (jobNames.includes(TRUSTED_GUARD_CHECK)) {
+    // The exemption belongs to the immutable verifier, not to its file name. A
+    // proposal that turns that file into a pull-request workflow is publishing
+    // the trusted check for itself.
+    if (path !== TRUSTED_GUARD_WORKFLOW || proposed) {
       failures.push(
-        `Only ${TRUSTED_GUARD_WORKFLOW} may publish the ${TRUSTED_GUARD_CHECK} check: ${path}`
+        `Only the immutable ${TRUSTED_GUARD_WORKFLOW} may publish the ` +
+          `${TRUSTED_GUARD_CHECK} check: ${path}`
       );
     }
   }
