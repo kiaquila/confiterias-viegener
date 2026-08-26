@@ -7,6 +7,7 @@ import test from "node:test";
 
 import {
   permissionBlocks,
+  workflowActions,
   reachableFromPullRequest,
   unreachableFromPullRequest,
   validateWorkflowText,
@@ -487,6 +488,117 @@ test("a negated guard never earns the exemption", () => {
 test("tab indentation is not guessed at", () => {
   assert.equal(workflowTriggers("on:\n\tpush:\n"), null);
   assert.equal(reachableFromPullRequest("on:\n\tpush:\n"), true);
+});
+
+test("keys are recognised in every spelling YAML allows", () => {
+  // An inline comment on the jobs key must not hide the jobs beneath it.
+  const commented = workflow([
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs: # workflow jobs",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    permissions:",
+    "      contents: write",
+    "    steps:",
+    "      - run: true"
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", commented).join("\n"),
+    /Write permission contents: write is reachable.*job build/
+  );
+
+  // Neither may a quoted job-level permissions key.
+  const quoted = workflow([
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    'permissions':",
+    "      contents: write",
+    "    steps:",
+    "      - run: true"
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", quoted).join("\n"),
+    /Write permission contents: write is reachable.*job build/
+  );
+
+  // A quoted `uses` key still has to name a pinned action.
+  assert.deepEqual(workflowActions(workflow(["    steps:", "      - 'uses': actions/checkout@v4"])), [
+    "actions/checkout@v4"
+  ]);
+  assert.match(
+    validateWorkflowText(
+      ".github/workflows/example.yml",
+      workflow([
+        "on:",
+        "  push:",
+        "permissions:",
+        "  contents: read",
+        "jobs:",
+        "  build:",
+        "    runs-on: ubuntu-latest",
+        "    steps:",
+        "      - 'uses': actions/checkout@v4"
+      ])
+    ).join("\n"),
+    /not pinned to a full commit SHA/
+  );
+});
+
+test("a job field the reader cannot name is refused, not skipped", () => {
+  const failures = validateWorkflowText(
+    ".github/workflows/example.yml",
+    workflow([
+      "on:",
+      "  pull_request:",
+      "permissions:",
+      "  contents: read",
+      "jobs:",
+      "  build:",
+      "    runs-on: ubuntu-latest",
+      "    ? permissions",
+      "    steps:",
+      "      - run: true"
+    ])
+  );
+  assert.match(failures.join("\n"), /permissions could not be read.*job build/);
+});
+
+test("YAML features the reader does not implement make a workflow unreadable", () => {
+  for (const line of ["    <<: *defaults", "    runs-on: *runner"]) {
+    const text = workflow([
+      "on:",
+      "  pull_request:",
+      "permissions:",
+      "  contents: read",
+      "jobs:",
+      "  build:",
+      line,
+      "    steps:",
+      "      - run: true"
+    ]);
+    assert.equal(reachableFromPullRequest(text), true);
+    assert.match(
+      validateWorkflowText(".github/workflows/example.yml", text).join("\n"),
+      /permissions could not be read/
+    );
+  }
+
+  // A cron expression is not an alias, and must keep reading normally.
+  assert.deepEqual(
+    validateWorkflowText(
+      ".github/workflows/example.yml",
+      workflow(["on:", "  schedule:", '    - cron: "0 6 * * 1"', "permissions:", "  contents: read"])
+    ),
+    []
+  );
 });
 
 test("rejects write-all workflow permissions", () => {
