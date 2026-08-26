@@ -553,6 +553,49 @@ test("keys are recognised in every spelling YAML allows", () => {
   );
 });
 
+test("an explicit mapping key is refused, however its name is spelled", () => {
+  for (const key of ['    ? permissions', '    ? "permiss\\u0069ons"']) {
+    const text = workflow([
+      "on:",
+      "  pull_request:",
+      "permissions:",
+      "  contents: read",
+      "jobs:",
+      "  build:",
+      "    runs-on: ubuntu-latest",
+      key,
+      "    :",
+      "      contents: write",
+      "    steps:",
+      "      - run: true"
+    ]);
+    assert.equal(reachableFromPullRequest(text), true);
+    assert.match(
+      validateWorkflowText(".github/workflows/example.yml", text).join("\n"),
+      /permissions could not be read/,
+      key
+    );
+  }
+});
+
+test("an escaped key is caught inside a sequence item too", () => {
+  const text = workflow([
+    "on:",
+    "  push:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    '      - "us\\u0065s": actions/checkout@v4'
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", text).join("\n"),
+    /permissions could not be read/
+  );
+});
+
 test("a job field the reader cannot name is refused, not skipped", () => {
   const failures = validateWorkflowText(
     ".github/workflows/example.yml",
@@ -569,7 +612,9 @@ test("a job field the reader cannot name is refused, not skipped", () => {
       "      - run: true"
     ])
   );
-  assert.match(failures.join("\n"), /permissions could not be read.*job build/);
+  // The file-level refusal of explicit mapping keys fires first; either way the
+  // job's write scope is never silently accepted.
+  assert.match(failures.join("\n"), /permissions could not be read/);
 });
 
 test("a flow-style step is refused rather than left unchecked", () => {

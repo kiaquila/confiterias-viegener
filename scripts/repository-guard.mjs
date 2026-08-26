@@ -130,7 +130,11 @@ const UNSUPPORTED_YAML = [
   // A double-quoted key decodes escapes, so `"permiss\\u0069ons":` is the
   // permissions key to GitHub but not to any spelling this reader matches.
   // Decoding YAML escapes is out of scope; refusing them is not.
-  [/^"[^"]*\\[^"]*"\s*:/, "escaped key"],
+  [/(?:^|\s)"[^"]*\\[^"]*"\s*:/, "escaped key"],
+  // An explicit mapping entry puts its key on its own line after `?`, so the
+  // key this reader would classify is not where it looks — and the key may be
+  // quoted and escaped on top of that.
+  [/^\?(?:\s|$)/, "explicit mapping key"],
   // A flow-style step hides its keys from a line-oriented reader, so
   // `- { uses: actions/checkout@v4 }` would never be checked for a SHA pin.
   [/^-\s*\{/, "flow-style sequence item"]
