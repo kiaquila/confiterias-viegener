@@ -101,85 +101,118 @@ function looksBinary(buffer) {
   return buffer.subarray(0, Math.min(buffer.length, 8192)).includes(0);
 }
 
-// A hand-written parser cannot be trusted to understand every YAML spelling, so
-// it never guesses: anything it cannot classify is reported, or treated as the
-// dangerous case. `null` from any of these means "unparseable", never "empty".
+// Workflow reading. There is no YAML parser here and this repository has no
+// dependencies, so the reader never assumes a shape: indentation is derived
+// from the document rather than hard-coded, and anything it cannot classify is
+// reported or treated as the dangerous case. `null` means "unreadable", never
+// "empty".
 
-function isComment(line) {
-  return /^\s*#/.test(line);
+function lineModel(text) {
+  return text.split("\n").map((raw) => {
+    const line = raw.replace(/\s+$/, "");
+    const content = line.replace(/^[ \t]*/, "");
+    const indentText = line.slice(0, line.length - content.length);
+    return {
+      content,
+      indent: indentText.length,
+      tabbed: indentText.includes("\t"),
+      skip: content === "" || content.startsWith("#")
+    };
+  });
 }
 
-function isBlank(line) {
-  return line.trim() === "";
+// The block under `model[index]`: where its children start, how deep they are,
+// and where the block ends. `childIndent === null` means the key has no block.
+function childBlock(model, index) {
+  const parentIndent = model[index].indent;
+  let childIndent = null;
+  let end = model.length;
+  for (let i = index + 1; i < model.length; i += 1) {
+    if (model[i].skip) continue;
+    if (model[i].indent <= parentIndent) {
+      end = i;
+      break;
+    }
+    if (childIndent === null) childIndent = model[i].indent;
+  }
+  return { childIndent, end };
+}
+
+function topLevelIndex(model, pattern) {
+  return model.findIndex((entry) => !entry.skip && entry.indent === 0 && pattern.test(entry.content));
 }
 
 const TRIGGER_NAME = /^[a-z_]+$/;
 
 // The trigger names a workflow declares, or `null` when the `on:` section is
-// written in a form this parser does not handle — a flow mapping, an anchor, a
-// merge key. Callers must treat `null` as "could be anything".
+// written in a form this reader does not handle.
 export function workflowTriggers(text) {
-  const lines = text.split("\n").map((line) => line.replace(/\s+$/, ""));
-  const index = lines.findIndex((line) => /^(?:on|'on'|"on"):/.test(line));
+  const model = lineModel(text);
+  if (model.some((entry) => !entry.skip && entry.tabbed)) return null;
+
+  const index = topLevelIndex(model, /^(?:on|'on'|"on"):/);
   if (index === -1) return null;
 
-  const triggers = new Set();
-  const inline = lines[index].match(/^(?:on|'on'|"on"):\s*(\S.*?)\s*(?:#.*)?$/);
+  const inline = model[index].content.match(/^(?:on|'on'|"on"):[ ]*(\S.*?)[ ]*(?:#.*)?$/);
   if (inline) {
     const value = inline[1];
     if (TRIGGER_NAME.test(value)) return new Set([value]);
     const sequence = value.match(/^\[\s*([a-z_]+(?:\s*,\s*[a-z_]+)*)\s*\]$/);
     if (!sequence) return null;
-    for (const name of sequence[1].split(",")) triggers.add(name.trim());
-    return triggers;
+    return new Set(sequence[1].split(",").map((name) => name.trim()));
   }
 
-  for (let i = index + 1; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (isBlank(line) || isComment(line)) continue;
-    const measured = line.match(/^( *)(\S.*)$/);
-    if (!measured) continue;
-    const indent = measured[0].length - measured[2].length;
-    if (indent === 0) break;
-    if (indent > 2) continue; // options of a trigger already recorded
-    const key = measured[2].match(/^([a-z_]+):(?:\s*(?:#.*)?)?$/);
+  const { childIndent, end } = childBlock(model, index);
+  if (childIndent === null) return null;
+
+  const triggers = new Set();
+  for (let i = index + 1; i < end; i += 1) {
+    const entry = model[i];
+    if (entry.skip) continue;
+    if (entry.indent > childIndent) continue; // options of a trigger already recorded
+    const key = entry.content.match(/^([a-z_]+):(?:[ ]*(?:#.*)?)?$/);
     if (key) {
       triggers.add(key[1]);
       continue;
     }
-    const item = measured[2].match(/^-\s+([a-z_]+)\s*(?:#.*)?$/);
+    const item = entry.content.match(/^-[ ]+([a-z_]+)[ ]*(?:#.*)?$/);
     if (item) {
       triggers.add(item[1]);
       continue;
     }
-    return null; // something this parser does not understand
+    return null;
   }
   return triggers;
 }
 
 // `pull_request` and `pull_request_target` execute the proposal's own workflow
-// definition. Anything this parser cannot prove otherwise counts as reachable.
+// definition. Anything this reader cannot prove otherwise counts as reachable.
 export function reachableFromPullRequest(text) {
   const triggers = workflowTriggers(text);
   if (!triggers) return true;
   return triggers.has("pull_request") || triggers.has("pull_request_target");
 }
 
-// Reads one `permissions:` mapping. Comments and blank lines inside the mapping
-// are skipped, trailing comments on an entry are allowed, and anything else —
-// a nested structure, a flow mapping, an entry shape this parser does not
-// recognise — returns `null` so the caller can refuse the workflow outright.
-function readPermissionEntries(lines, start, indent) {
+// Reads one `permissions:` value, block mapping or scalar. `null` means the
+// value could not be read and the caller must refuse it.
+function readPermissions(model, index) {
+  const inline = model[index].content.match(/^permissions:[ ]*(\S.*?)[ ]*(?:#.*)?$/);
+  if (inline) {
+    const scalar = inline[1];
+    if (scalar === "{}") return [];
+    if (/^(?:read-all|write-all)$/.test(scalar)) return [["all", scalar.replace("-all", "")]];
+    return null;
+  }
+
+  const { childIndent, end } = childBlock(model, index);
+  if (childIndent === null) return null;
+
   const entries = [];
-  for (let i = start; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (isBlank(line) || isComment(line)) continue;
-    const measured = line.match(/^( *)(\S.*)$/);
-    if (!measured) continue;
-    const actual = measured[1].length;
-    if (actual < indent) break;
-    if (actual > indent) return null;
-    const pair = measured[2].match(/^([a-z-]+):\s*([A-Za-z-]+)\s*(?:#.*)?$/);
+  for (let i = index + 1; i < end; i += 1) {
+    const entry = model[i];
+    if (entry.skip) continue;
+    if (entry.indent !== childIndent) return null;
+    const pair = entry.content.match(/^([a-z-]+):[ ]*([A-Za-z-]+)[ ]*(?:#.*)?$/);
     if (!pair) return null;
     entries.push([pair[1], pair[2]]);
   }
@@ -187,52 +220,57 @@ function readPermissionEntries(lines, start, indent) {
 }
 
 // Every `permissions:` mapping in the file — the top-level one and each job's —
-// with the job's `if:` guard, which is what decides whether a pull-request event
-// can reach that job at all. A block that could not be read carries
-// `entries: null`.
+// with the job's `if:` guard, which decides whether a pull-request event can
+// reach that job at all. `entries: null` marks a value that could not be read.
 export function permissionBlocks(text) {
-  const lines = text.split("\n").map((line) => line.replace(/\s+$/, ""));
+  const model = lineModel(text);
   const blocks = [];
-  let inJobs = false;
-  let job = null;
 
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (isBlank(line) || isComment(line)) continue;
+  const topIndex = topLevelIndex(model, /^permissions:/);
+  if (topIndex !== -1) {
+    blocks.push({ scope: "top", job: null, guard: "", entries: readPermissions(model, topIndex) });
+  }
 
-    if (/^jobs:\s*$/.test(line)) {
-      inJobs = true;
+  const jobsIndex = topLevelIndex(model, /^jobs:[ ]*$/);
+  if (jobsIndex === -1) return blocks;
+
+  const { childIndent: jobIndent, end: jobsEnd } = childBlock(model, jobsIndex);
+  if (jobIndent === null) return blocks;
+
+  for (let i = jobsIndex + 1; i < jobsEnd; i += 1) {
+    const entry = model[i];
+    if (entry.skip || entry.indent !== jobIndent) continue;
+    const jobKey = entry.content.match(/^([A-Za-z0-9_-]+):[ ]*$/);
+    if (!jobKey) {
+      // A job entry this reader cannot name still has to be accounted for.
+      blocks.push({ scope: "job", job: "(unreadable)", guard: "", entries: null });
       continue;
     }
-    if (/^\S/.test(line)) {
-      inJobs = false;
-      job = null;
-    }
 
-    if (inJobs) {
-      const jobKey = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
-      if (jobKey) {
-        job = { name: jobKey[1], guard: "" };
-        continue;
-      }
-      const guard = job && line.match(/^ {4}if:\s*(.*)$/);
-      if (guard) {
-        let value = guard[1].trim();
-        for (let j = i + 1; j < lines.length && /^ {6}\S/.test(lines[j]); j += 1) {
-          value += ` ${lines[j].trim()}`;
+    const { childIndent: keyIndent, end: jobEnd } = childBlock(model, i);
+    if (keyIndent === null) continue;
+
+    let guard = "";
+    for (let j = i + 1; j < jobEnd; j += 1) {
+      const inner = model[j];
+      if (inner.skip || inner.indent !== keyIndent) continue;
+      const guardKey = inner.content.match(/^if:[ ]*(.*)$/);
+      if (guardKey) {
+        guard = guardKey[1].trim();
+        for (let k = j + 1; k < jobEnd && (model[k].skip || model[k].indent > keyIndent); k += 1) {
+          if (!model[k].skip) guard += ` ${model[k].content}`;
         }
-        job.guard = value;
       }
     }
-
-    if (/^permissions:\s*$/.test(line)) {
-      blocks.push({ scope: "top", job: null, guard: "", entries: readPermissionEntries(lines, i + 1, 2) });
-    } else if (inJobs && job && /^ {4}permissions:\s*$/.test(line)) {
+    for (let j = i + 1; j < jobEnd; j += 1) {
+      const inner = model[j];
+      if (inner.skip || inner.indent !== keyIndent) continue;
+      if (!/^permissions:/.test(inner.content)) continue;
       blocks.push({
         scope: "job",
-        job: job.name,
-        guard: job.guard,
-        entries: readPermissionEntries(lines, i + 1, 6)
+        job: jobKey[1],
+        guard,
+        entries: readPermissions(model, j)
       });
     }
   }
@@ -240,14 +278,23 @@ export function permissionBlocks(text) {
 }
 
 // A job is exempt only when its condition provably cannot hold for a
-// pull-request event: no disjunction, no mention of pull_request, and at least
-// one positive `github.event_name ==` test for some other event. Anything more
-// involved is left unexempt rather than reasoned about.
+// pull-request event: no negation of any kind, no disjunction, no mention of
+// pull_request, and at least one plain `github.event_name ==` test for another
+// event. Anything more involved is left unexempt rather than reasoned about.
 export function unreachableFromPullRequest(guard) {
-  if (!guard || /\|\|/.test(guard)) return false;
-  if (/\bpull_request\b/.test(guard) || /\bpull_request_target\b/.test(guard)) return false;
-  if (/!=/.test(guard)) return false;
-  return /github\.event_name\s*==\s*'[a-z_]+'/.test(guard);
+  if (!guard) return false;
+  const condition = guard
+    .trim()
+    .replace(/^[|>][-+]?[ ]*/, "")
+    .replace(/^\$\{\{[ ]*/, "")
+    .replace(/[ ]*\}\}$/, "")
+    .trim();
+  if (!condition) return false;
+  if (condition.includes("!") || condition.includes("||")) return false;
+  if (/\bpull_request\b/.test(condition) || /\bpull_request_target\b/.test(condition)) return false;
+  return condition
+    .split("&&")
+    .some((part) => /^github\.event_name[ ]*==[ ]*'[a-z_]+'$/.test(part.trim()));
 }
 
 export function validateWorkflowText(path, text) {
@@ -255,11 +302,10 @@ export function validateWorkflowText(path, text) {
   if (/\bpull_request_target\b/.test(text)) {
     failures.push(`High-risk pull_request_target trigger in ${path}`);
   }
-  if (!/^permissions:\s*(?:\n|$)/m.test(text)) {
+
+  const blocks = permissionBlocks(text);
+  if (!blocks.some((block) => block.scope === "top")) {
     failures.push(`Workflow must declare top-level permissions: ${path}`);
-  }
-  if (/^permissions:\s*["']?write-all["']?\s*$/m.test(text)) {
-    failures.push(`Workflow may not use write-all permissions: ${path}`);
   }
 
   // `pull_request` runs the proposal's own workflow definition. Any write scope
@@ -268,7 +314,7 @@ export function validateWorkflowText(path, text) {
   // the default branch's definition — workflow_run, issue_comment,
   // pull_request_review, schedule, workflow_dispatch — may hold write scopes.
   const proposed = reachableFromPullRequest(text);
-  for (const block of permissionBlocks(text)) {
+  for (const block of blocks) {
     const where = block.scope === "top" ? "top-level" : `job ${block.job}`;
     if (block.entries === null) {
       failures.push(
@@ -277,10 +323,14 @@ export function validateWorkflowText(path, text) {
       );
       continue;
     }
-    if (!proposed) continue;
-    if (block.scope === "job" && unreachableFromPullRequest(block.guard)) continue;
     for (const [scope, value] of block.entries) {
       if (!/^(write|write-all)$/.test(value)) continue;
+      if (scope === "all") {
+        failures.push(`Workflow may not use write-all permissions: ${path} (${where})`);
+        continue;
+      }
+      if (!proposed) continue;
+      if (block.scope === "job" && unreachableFromPullRequest(block.guard)) continue;
       failures.push(
         `Write permission ${scope}: ${value} is reachable from proposed ` +
           `pull-request code in ${path} (${where})`

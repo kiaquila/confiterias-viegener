@@ -384,6 +384,111 @@ test("a job is exempt only when its condition cannot hold for a pull request", (
   assert.match(failures.join("\n"), /Write permission checks: write is reachable.*job either/);
 });
 
+test("indentation is derived from the document, not assumed", () => {
+  // YAML allows any consistent indent. A four-space `on:` mapping is valid.
+  const deepTriggers = workflow(["on:", "    pull_request:", "permissions:", "  contents: write"]);
+  assert.deepEqual([...workflowTriggers(deepTriggers)], ["pull_request"]);
+  assert.equal(reachableFromPullRequest(deepTriggers), true);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", deepTriggers).join("\n"),
+    /Write permission contents: write is reachable/
+  );
+
+  // So is a four-space `jobs:` mapping, whose job permissions must stay visible.
+  const deepJobs = workflow([
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "    build:",
+    "        runs-on: ubuntu-latest",
+    "        permissions:",
+    "            checks: write",
+    "        steps:",
+    "          - run: true"
+  ]);
+  const blocks = permissionBlocks(deepJobs);
+  assert.deepEqual(blocks.map((block) => [block.scope, block.job]), [
+    ["top", null],
+    ["job", "build"]
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", deepJobs).join("\n"),
+    /Write permission checks: write is reachable.*job build/
+  );
+});
+
+test("scalar permissions are read at every scope", () => {
+  const jobScalar = workflow([
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    permissions: write-all",
+    "    steps:",
+    "      - run: true"
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", jobScalar).join("\n"),
+    /may not use write-all permissions.*job build/
+  );
+
+  // A scalar the reader does not recognise is refused rather than ignored.
+  assert.match(
+    validateWorkflowText(
+      ".github/workflows/example.yml",
+      workflow(["on:", "  push:", "permissions: something-else"])
+    ).join("\n"),
+    /permissions could not be read/
+  );
+
+  // `read-all` and `{}` are read as the read-only forms they are.
+  assert.deepEqual(
+    validateWorkflowText(
+      ".github/workflows/example.yml",
+      workflow(["on:", "  pull_request:", "permissions: read-all"])
+    ),
+    []
+  );
+});
+
+test("a negated guard never earns the exemption", () => {
+  assert.equal(
+    unreachableFromPullRequest("${{ !(github.event_name == 'workflow_dispatch') }}"),
+    false
+  );
+  assert.equal(unreachableFromPullRequest("${{ github.event_name == 'workflow_run' }}"), true);
+
+  const negated = workflow([
+    "on:",
+    "  pull_request:",
+    "  workflow_dispatch:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  inverted:",
+    "    if: ${{ !(github.event_name == 'workflow_dispatch') }}",
+    "    runs-on: ubuntu-latest",
+    "    permissions:",
+    "      checks: write",
+    "    steps:",
+    "      - run: true"
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", negated).join("\n"),
+    /Write permission checks: write is reachable.*job inverted/
+  );
+});
+
+test("tab indentation is not guessed at", () => {
+  assert.equal(workflowTriggers("on:\n\tpush:\n"), null);
+  assert.equal(reachableFromPullRequest("on:\n\tpush:\n"), true);
+});
+
 test("rejects write-all workflow permissions", () => {
   const failures = validateWorkflowText(
     ".github/workflows/example.yml",
