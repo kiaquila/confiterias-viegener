@@ -28,9 +28,10 @@ claim controls that the repository or hosting platform does not enforce.
   originals and all 32 correctly described derivatives with the approved
   prototype files and pins their source paths and hashes in
   `website/assets/source/manifest.json`.
-- The final commit installs the shared baseline without changing `website/`.
-  All 46 managed files and the release manifest matched the pinned upstream
-  source during the 2026-08-21 audit.
+- The final commit installed the `kiaquila/web-design` baseline without
+  changing `website/`; all 46 managed files and the release manifest matched the
+  pinned upstream source during the 2026-08-21 audit. That control plane has
+  since been removed — see "Retired baseline control plane" below.
 
 This was not filtered from the old `kiaquila/web-design` default branch. It was
 bootstrapped from the approved feature state and image set described above.
@@ -58,20 +59,25 @@ unresolved provenance and rights risk. If final closeout requires a confirmed
 third-party licence, the assets must be replaced or their rights documented
 first.
 
-## Baseline
+## Retired baseline control plane
 
-| Field | Audited value |
-| --- | --- |
-| Source | `kiaquila/web-design` |
-| Version | `0.1.0-dev` |
-| Commit | `f042879d8b6d11cc80021bb19cc4aacd645cc621` |
-| Profile | `static-cloudflare` |
+The migration adopted the `kiaquila/web-design` baseline as a managed control
+plane: `.web-design/` with a lock, a release manifest, a managed-file list and a
+profile set, plus the sync, bootstrap, update-PR and baseline-source-verification
+machinery and the generic operations documents that described them.
 
-The full commit SHA identifies immutable bytes, but it is an earlier commit in
-the history of the open, unmerged `web-design` PR #46 rather than its current
-head, and it has no published stable release identity. A separate baseline-only
-pull request must replace it with the full SHA of the first stable release. That
-pull request may change only the lock and managed bytes moved by the release.
+Its lock pinned `f042879d8b6d11cc80021bb19cc4aacd645cc621` at version
+`0.1.0-dev` with profile `static-cloudflare` — an earlier commit in the history
+of an unmerged upstream branch rather than a published release. This document
+previously recorded replacing that pin with a stable release as required
+closeout work.
+
+That requirement is gone, because the model it belonged to is gone. The control
+plane was removed and replaced by a minimal project-owned setup: one CI
+workflow, one repository safety guard with its own tests, and the OSV scan.
+`kiaquila/web-design` is now a manual example to read from, never an upstream
+that this repository pins, syncs with or verifies against. No provisional
+baseline pin remains, and no future release or sync model is owed.
 
 ## GitHub governance
 
@@ -90,8 +96,8 @@ Until it is applied, maintainers enforce these controls manually:
 1. Make every future change on a focused branch and ready-for-review pull
    request; do not push directly to `main`.
 2. Review the exact current head and the Code Owner paths before merge.
-3. Require the check names in `.web-design/project.json`, including a
-   current-head Codex review, to be successful.
+3. Require `project-ci`, `osv-scan` and a current-head `Codex Review` to be
+   successful.
 4. Record two unchanged-head green snapshots at least 120 seconds apart before
    merge.
 5. Do not force-push or delete `main`, and resolve conversations before merge.
@@ -112,8 +118,9 @@ them, or keep recording the missing control.
 
 ## Cloudflare handoff and rollback
 
-The project configuration and externally verified Cloudflare Builds settings
-agree on the following values:
+The documented project settings in `README.md` and `website/wrangler.json` and
+the externally verified Cloudflare Builds settings agree on the following
+values:
 
 | Setting | Value |
 | --- | --- |
@@ -182,7 +189,9 @@ the following local checks without changing product files:
 - `npm ci --prefix website` completed successfully.
 - `npm --prefix website run check` built `dist/` and passed all 34 site tests.
 - `npm run preflight` passed the repository guard, managed-file verification,
-  and all 47 baseline policy and updater tests.
+  and all 47 baseline policy and updater tests. That command now runs the
+  project-owned guard and its own tests; the managed-file and updater half no
+  longer exists.
 - `npm --prefix website run images` regenerated all 34 derivatives without a
   tracked byte changing.
 - npm audit and OSV Scanner 2.5.0 found no dependency vulnerabilities.
@@ -256,7 +265,7 @@ does not chase it.
   `confiterias-viegener build token v2` is not bound to Builds and is queued
   for deletion pending the owner's confirmation; deleting it rotates nothing.
 - Apply branch protection to `main` now that the repository is public and the
-  feature is available, using the check names in `.web-design/project.json`.
+  feature is available, requiring `project-ci`, `osv-scan` and `Codex Review`.
 - Decide the final visibility. Public is the accepted migration-time state, not
   a permanent one; returning to private means accepting that Actions stop once
   the included allowance is spent, so that decision and its consequence belong
@@ -270,7 +279,5 @@ does not chase it.
   root `/website`, branch `main`, with the duplicate-source verification and
   its evidence recorded in the Cloudflare section above; the dashboard is
   authoritative for whatever is current.
-- Publish an immutable stable `web-design` release, then repin through a
-  baseline-only pull request.
 - Resolve or explicitly retain the documented prototype and asset provenance
   limitations; do not claim a licence that has not been established.

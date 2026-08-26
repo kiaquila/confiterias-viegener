@@ -99,7 +99,7 @@ only ever used as the light colour on a dark ground.
 ## Images
 
 Photographs ship as WebP with a JPEG fallback at the widths declared in `images`
-in `content.js`, and every shipped file stays under the 320KB budget the tests
+in `content.js`, and every shipped file stays under the 320 KiB budget the tests
 enforce. `website/assets/source/` holds the eight full-size originals; it is an
 input to `npm run images` and is never copied into `dist/`.
 
@@ -137,48 +137,23 @@ The standalone-repository migration, local and production verification,
 governance exceptions, and unresolved deployment evidence are recorded in
 [`docs/confiterias-viegener-migration-handoff.md`](./docs/confiterias-viegener-migration-handoff.md).
 
-## Repository baseline
+## Repository tooling
 
-Shared standards, the guard, CI, the review and OSV workflows and the update
-flow come from the `kiaquila/web-design` baseline and are listed in
-[`.web-design/managed-files.json`](./.web-design/managed-files.json). Everything
-else — this README, `AGENTS.md`, `website/`, `wrangler.json` and the deploy
-settings — is owned by this project.
+Everything in this repository is owned by this repository. There is no automatic
+upstream, no baseline lock, no managed-file manifest and no sync workflow: the
+project's own files are the only source of truth for its guard, CI and docs.
 
-| Field | Value |
+| Piece | What it is |
 | --- | --- |
-| Source | `kiaquila/web-design` |
-| Pinned commit | `f042879d8b6d11cc80021bb19cc4aacd645cc621` |
-| Version | `0.1.0-dev` |
-| Profile | `static-cloudflare` |
+| [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) | The single CI: the website build and tests, the repository safety guard, and the OSV dependency scan |
+| [`scripts/check-repository.mjs`](./scripts/check-repository.mjs) | The safety guard — no tracked secrets, `.env` files, personal paths, symlinks, dependency directories or build output, and least-privilege workflows with SHA-pinned actions |
+| [`tests/`](./tests/) | Regression tests for the guard and for the Codex review gate |
+| `.github/workflows/codex-review*.yml` | The current-head Codex review gate |
 
-Do not edit a managed file here. Changes to those come from the baseline through
-`npm run sync:web-design` in a reviewed update pull request.
-
-### Required follow-up: pin an immutable release
-
-**The pinned commit above is provisional.** `0.1.0-dev` is not a published
-release, and `f042879…` is an earlier commit in the history of the unmerged
-`kiaquila/web-design` branch `codex/web-design-template-v2` (PR #46), not the
-current branch head. It was used because no stable release existed when this
-repository was created.
-
-The full SHA pins immutable content, so movement of the branch does not change
-the bytes being verified. The weakness is release governance: the commit has no
-published stable release identity, and deleting or rebasing its only branch may
-make it harder to retrieve. Replace it with the full SHA of the first published
-stable release.
-
-Once PR #46 is merged and the first immutable `web-design` release is published,
-sync this project onto that release's full 40-character SHA in its own pull
-request:
-
-```bash
-npm run sync:web-design
-```
-
-That pull request must change nothing but `.web-design/lock.json` and any
-managed bytes the release actually moves.
+`kiaquila/web-design` is a **manual example to read from, not an upstream to
+sync with**. Nothing pulls from it, nothing verifies against it, and nothing in
+this repository is pinned to one of its commits. Borrowing an idea from it means
+copying the idea into a reviewed pull request here, on purpose.
 
 ## Checks
 
@@ -188,8 +163,10 @@ npm --prefix website run check
 ```
 
 That builds into `dist/` and runs the test suite against the built output.
-`dist/` is generated and is not committed. Also run the repository guard and the
-baseline checks from the root:
+`dist/` is generated and is not committed. The tests are also where the
+performance budgets live: every shipped image stays under 320 KiB and the
+rendered `index.html` stays under 40 KiB. Then run the repository safety guard
+and its own tests from the root:
 
 ```bash
 npm run preflight

@@ -2,5 +2,5 @@
 
 @AGENTS.md
 
-Use `AGENTS.md` as the instruction source of truth. Also read the project
-profile at `.web-design/project.json` and the task-relevant product documents.
+Use `AGENTS.md` as the instruction source of truth, together with the root
+`README.md` and the task-relevant product documents.
