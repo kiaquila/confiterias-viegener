@@ -58,7 +58,7 @@ const SECRET_PATTERNS = [
   ["fine-grained GitHub token", /github_pat_[A-Za-z0-9_]{20,}/],
   ["OpenAI-style API key", /sk-[A-Za-z0-9_-]{32,}/],
   ["Slack token", /xox[baprs]-[A-Za-z0-9-]{20,}/],
-  ["AWS access key", /AKIA[0-9A-Z]{16}/],
+  ["AWS access key", /(?:AKIA|ASIA|AIDA|AROA|AGPA|APKA|ANPA|ANVA)[0-9A-Z]{16}/],
   ["Telegram bot token", /\b\d{8,10}:[A-Za-z0-9_-]{35}\b/]
 ];
 
@@ -130,7 +130,10 @@ const UNSUPPORTED_YAML = [
   // A double-quoted key decodes escapes, so `"permiss\\u0069ons":` is the
   // permissions key to GitHub but not to any spelling this reader matches.
   // Decoding YAML escapes is out of scope; refusing them is not.
-  [/(?:^|\s)"[^"]*\\[^"]*"\s*:/, "escaped key"],
+  // A double-quoted scalar decodes escapes, so its text in the file is not the
+  // text GitHub sees — as a key or as a value. Decoding YAML escapes is out of
+  // scope for a reader with no YAML parser behind it; refusing them is not.
+  [/"[^"]*\\[^"]*"/, "escaped scalar"],
   // An explicit mapping entry puts its key on its own line after `?`, so the
   // key this reader would classify is not where it looks — and the key may be
   // quoted and escaped on top of that.

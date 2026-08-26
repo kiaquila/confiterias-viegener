@@ -700,6 +700,28 @@ test("the trusted name is refused wherever a pull request could publish it", () 
   assert.match(failures.join("\n"), /Only the immutable .* may publish/);
 });
 
+test("an escaped job name cannot smuggle in the trusted check name", () => {
+  // YAML decodes escapes in double-quoted values, so this resolves to the
+  // reserved name while its spelling in the file does not.
+  const encoded = workflow([
+    "name: Project CI",
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  spoof:",
+    '    name: "trusted\\u002drepository\\u002dguard"',
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: true"
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/ci.yml", encoded).join("\n"),
+    /could not be read/
+  );
+});
+
 test("a job name the reader cannot resolve is refused, not recorded raw", () => {
   // A block scalar keeps the text on the following line.
   const blockScalar = workflow([
@@ -926,6 +948,15 @@ test("size and NUL bytes do not excuse a file from the secret scan", () => {
     const result = runGuard(root);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Possible fine-grained GitHub token in website\/fine\.txt/);
+  });
+
+  withFixture((root) => {
+    // Temporary AWS credentials use ASIA, not AKIA.
+    writeFileSync(join(root, "website/aws.txt"), `ASIA${"C".repeat(16)}\n`);
+    git(root, "add", "-f", "website/aws.txt");
+    const result = runGuard(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Possible AWS access key in website\/aws\.txt/);
   });
 
   withFixture((root) => {
