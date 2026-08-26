@@ -66,14 +66,29 @@ function parseRoot(argv) {
   return resolve(argv[index + 1]);
 }
 
-function repositoryFiles(root) {
-  const result = spawnSync(
-    "git",
-    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-    { cwd: root, encoding: "utf8" }
-  );
+// CI checks out the trusted copy of this guard into `.guard-trusted/` so that a
+// pull request cannot weaken the policy judging it. Those files belong to the
+// default branch, not to the proposed tree, so they are never scanned — but
+// nothing may smuggle a tracked file into that path either.
+const TRUSTED_GUARD_PREFIX = ".guard-trusted/";
+
+function gitFiles(root, ...selectors) {
+  const result = spawnSync("git", ["ls-files", ...selectors, "-z"], {
+    cwd: root,
+    encoding: "utf8"
+  });
   if (result.status !== 0) throw new Error(result.stderr.trim() || "git ls-files failed");
   return result.stdout.split("\0").filter(Boolean);
+}
+
+function repositoryFiles(root) {
+  const tracked = gitFiles(root, "--cached").filter((file) =>
+    file.startsWith(TRUSTED_GUARD_PREFIX)
+  );
+  const files = gitFiles(root, "--cached", "--others", "--exclude-standard").filter(
+    (file) => !file.startsWith(TRUSTED_GUARD_PREFIX)
+  );
+  return { files, trustedGuardPathsTracked: tracked };
 }
 
 function looksBinary(buffer) {
@@ -109,7 +124,10 @@ export function scanRepository(root) {
     if (!existsSync(join(root, path))) failures.push(`Missing required repository file: ${path}`);
   }
 
-  const files = repositoryFiles(root);
+  const { files, trustedGuardPathsTracked } = repositoryFiles(root);
+  for (const path of trustedGuardPathsTracked) {
+    failures.push(`The trusted guard checkout path is reserved and may not be tracked: ${path}`);
+  }
 
   for (const file of files) {
     const normalized = file.split(sep).join("/");

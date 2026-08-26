@@ -132,6 +132,30 @@ test("requires safe workflow triggers, permissions, and pinned actions", () => {
   });
 });
 
+test("ignores the trusted guard checkout but refuses to let it be tracked", () => {
+  withFixture((root) => {
+    write(root, ".guard-trusted/scripts/check-repository.mjs", "// trusted copy\n");
+    write(root, ".guard-trusted/token.txt", `ghp_${"A".repeat(32)}\n`);
+    const ignored = runGuard(root);
+    assert.equal(ignored.status, 0, ignored.stderr);
+
+    git(root, "add", "-f", ".guard-trusted/token.txt");
+    const tracked = runGuard(root);
+    assert.equal(tracked.status, 1);
+    assert.match(tracked.stderr, /trusted guard checkout path is reserved/);
+  });
+});
+
+test("CI runs the guard from the default branch, not from the proposed copy", () => {
+  const workflow = readFileSync(join(repositoryRoot, ".github/workflows/ci.yml"), "utf8");
+  assert.match(workflow, /path: \.guard-trusted/);
+  assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
+  assert.match(
+    workflow,
+    /node \.guard-trusted\/scripts\/check-repository\.mjs --root "\$GITHUB_WORKSPACE"/
+  );
+});
+
 test("rejects write-all workflow permissions", () => {
   const failures = validateWorkflowText(
     ".github/workflows/example.yml",

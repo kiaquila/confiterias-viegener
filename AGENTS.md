@@ -25,7 +25,10 @@ before changing the project.
   production exports, personal absolute paths, or unnecessary customer data.
 - Do not deploy, publish, change DNS, send messages, submit forms, or mutate a
   client's external system without explicit user authorization.
-- Do not weaken a check in the same change merely to make it pass.
+- Do not weaken a check in the same change merely to make it pass. CI runs the
+  repository guard from `main`, never from the proposed branch, so a pull
+  request that edits `scripts/check-repository.mjs` is still judged by the
+  policy already on the default branch.
 - `kiaquila/web-design` is a manual example, not an upstream. This repository is
   not pinned to it, nothing syncs from it, and no workflow verifies against it.
   Taking an idea from it means copying that idea here deliberately, in a

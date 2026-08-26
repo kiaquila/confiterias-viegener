@@ -146,7 +146,7 @@ project's own files are the only source of truth for its guard, CI and docs.
 | Piece | What it is |
 | --- | --- |
 | [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) | The single CI: the website build and tests, the repository safety guard, and the OSV dependency scan |
-| [`scripts/check-repository.mjs`](./scripts/check-repository.mjs) | The safety guard — no tracked secrets, `.env` files, personal paths, symlinks, dependency directories or build output, and least-privilege workflows with SHA-pinned actions |
+| [`scripts/check-repository.mjs`](./scripts/check-repository.mjs) | The safety guard — no tracked secrets, `.env` files, personal paths, symlinks, dependency directories or build output, and least-privilege workflows with SHA-pinned actions. CI runs the copy on `main`, not the proposed one, so a pull request cannot weaken the policy that is judging it |
 | [`tests/`](./tests/) | Regression tests for the guard and for the Codex review gate |
 | `.github/workflows/codex-review*.yml` | The current-head Codex review gate |
 

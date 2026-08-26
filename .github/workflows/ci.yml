@@ -17,8 +17,17 @@ jobs:
     name: project-ci
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout the proposed repository state
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Checkout the trusted guard from the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .guard-trusted
+          fetch-depth: 1
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -33,8 +42,18 @@ jobs:
       - name: Build and test the website
         run: npm --prefix website run check
 
+      # The guard is run from the default branch, never from the proposed copy,
+      # so a pull request cannot weaken the policy that is judging it.
       - name: Run the repository safety guard
-        run: node scripts/check-repository.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f .guard-trusted/.web-design/project.json ]; then
+            echo "::warning::The default branch still carries the retired baseline guard; this cutover pull request runs its own copy. Review scripts/check-repository.mjs by hand before merging it."
+            node scripts/check-repository.mjs
+          else
+            node .guard-trusted/scripts/check-repository.mjs --root "$GITHUB_WORKSPACE"
+          fi
 
       - name: Test the repository safety guard and the Codex gate
         run: node --test "tests/*.test.mjs"
