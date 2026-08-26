@@ -433,8 +433,15 @@ const TRUSTED_VERIFIER_REQUIREMENTS = [
 ];
 
 export function validateTrustedVerifier(text) {
+  // Requirements are matched against what the workflow executes, never against
+  // its comments: the ten fragments below could otherwise be pasted into
+  // trailing comments above a `run: echo success` body.
+  const executable = lineModel(text)
+    .filter((entry) => !entry.skip)
+    .map((entry) => strip(entry.content))
+    .join("\n");
   const missing = TRUSTED_VERIFIER_REQUIREMENTS
-    .filter(([pattern]) => !pattern.test(text))
+    .filter(([pattern]) => !pattern.test(executable))
     .map(([, description]) => description);
   const triggers = workflowTriggers(text);
   if (!triggers || !triggers.has("workflow_run")) {

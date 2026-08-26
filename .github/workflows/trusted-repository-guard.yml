@@ -6,6 +6,17 @@ name: Trusted Repository Guard
 # default branch's copy of this file and the default branch's policy, whatever
 # the proposal contains, and publishes the result as a check bound to the exact
 # pull-request head SHA.
+#
+# One residual is not closable here, and is recorded rather than papered over.
+# `workflow_run` selects the upstream workflow by name, so a proposal that
+# renames Project CI stops this job from firing at all, and could then publish
+# `project-ci` and `trusted-repository-guard` from its own renamed workflow. The
+# guard reserves both names, but the guard is what this job runs — the
+# enforcement is circular in exactly that case. What closes it is repository
+# configuration rather than a workflow: branch protection requiring these checks
+# plus Code Owner review on `/.github/workflows/`, which CODEOWNERS already
+# declares and the migration handoff lists as open closeout work. A rename
+# touches that path and needs the owner's approval.
 
 on:
   workflow_run:

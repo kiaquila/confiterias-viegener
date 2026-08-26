@@ -719,6 +719,32 @@ test("the trusted verifier's body is required, not just its name", () => {
   ]);
   const missing = validateTrustedVerifier(noop);
   assert.ok(missing.length >= 8, missing.join("; "));
+
+  // Nor can the required fragments be pasted into comments above a no-op body:
+  // requirements are matched against what the workflow executes.
+  const stuffed = workflow([
+    "name: Trusted Repository Guard",
+    "on:",
+    "  workflow_run:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  verify:",
+    "    name: trusted-repository-guard",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: echo success # ref: ${{ github.event.repository.default_branch }}",
+    "      # ref: ${{ github.event.workflow_run.head_sha }}",
+    "      # path: .guard-proposed",
+    '      # scripts/repository-guard.mjs --root "$GITHUB_WORKSPACE/.guard-proposed"',
+    '      # -z "$ASSOCIATED_HEAD_SHA"',
+    '      # -n "$SECOND_ASSOCIATION"',
+    '      # "$RUN_HEAD_SHA" != "$ASSOCIATED_HEAD_SHA"',
+    "      # -f name=trusted-repository-guard",
+    '      # -f head_sha="$HEAD_SHA"',
+    '      # [ "$CONCLUSION" = "success" ]'
+  ]);
+  assert.equal(validateTrustedVerifier(stuffed).length, missing.length);
   assert.match(
     validateWorkflowText(".github/workflows/trusted-repository-guard.yml", noop).join("\n"),
     /must run the default branch's guard against that checkout/
