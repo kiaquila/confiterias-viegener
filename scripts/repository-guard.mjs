@@ -7,7 +7,7 @@
 // nothing about releases, locks, manifests or an upstream baseline, and there is
 // no automatic upstream that can rewrite it.
 
-import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { basename, join, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -86,17 +86,124 @@ function gitFiles(root, ...selectors) {
 }
 
 function repositoryFiles(root) {
-  const tracked = gitFiles(root, "--cached").filter((file) =>
-    file.startsWith(TRUSTED_GUARD_PREFIX)
-  );
+  const cached = gitFiles(root, "--cached");
   const files = gitFiles(root, "--cached", "--others", "--exclude-standard").filter(
     (file) => !file.startsWith(TRUSTED_GUARD_PREFIX)
   );
-  return { files, trustedGuardPathsTracked: tracked };
+  return {
+    files,
+    tracked: new Set(cached),
+    trustedGuardPathsTracked: cached.filter((file) => file.startsWith(TRUSTED_GUARD_PREFIX))
+  };
 }
 
 function looksBinary(buffer) {
   return buffer.subarray(0, Math.min(buffer.length, 8192)).includes(0);
+}
+
+function meaningful(line) {
+  return line.trim() !== "" && !/^\s*#/.test(line);
+}
+
+// The trigger names a workflow declares, from either `on: push`, `on: [a, b]`
+// or a block `on:` mapping.
+export function workflowTriggers(text) {
+  const triggers = new Set();
+  let inOn = false;
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/\s+$/, "");
+    if (!meaningful(line)) continue;
+    const inline = line.match(/^on:\s*(\S.*)$/);
+    if (inline) {
+      inOn = false;
+      const value = inline[1].trim();
+      if (value.startsWith("[")) {
+        for (const name of value.replace(/[[\]]/g, "").split(",")) triggers.add(name.trim());
+      } else {
+        triggers.add(value);
+      }
+      continue;
+    }
+    if (/^on:\s*$/.test(line)) {
+      inOn = true;
+      continue;
+    }
+    if (!inOn) continue;
+    if (/^\S/.test(line)) {
+      inOn = false;
+      continue;
+    }
+    const key = line.match(/^ {2}([A-Za-z_][A-Za-z0-9_]*):/);
+    if (key) triggers.add(key[1]);
+    const item = line.match(/^ {2}- +([A-Za-z_][A-Za-z0-9_]*)\s*$/);
+    if (item) triggers.add(item[1]);
+  }
+  return triggers;
+}
+
+// Every `permissions:` mapping in the file — the top-level one and each job's —
+// together with the job's `if:` guard, which is what decides whether a job can
+// be reached by a proposed pull-request event at all.
+export function permissionBlocks(text) {
+  const lines = text.split("\n").map((line) => line.replace(/\s+$/, ""));
+  const blocks = [];
+  let inJobs = false;
+  let job = null;
+
+  const readEntries = (start, indent) => {
+    const entries = [];
+    for (let i = start; i < lines.length; i += 1) {
+      const entry = lines[i];
+      if (!meaningful(entry)) break;
+      const pair = entry.match(new RegExp(`^ {${indent}}([a-z-]+):\\s*(\\S+)\\s*$`));
+      if (!pair) break;
+      entries.push([pair[1], pair[2].replace(/^["']|["']$/g, "")]);
+    }
+    return entries;
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!meaningful(line)) continue;
+
+    if (/^jobs:\s*$/.test(line)) {
+      inJobs = true;
+      continue;
+    }
+    if (/^\S/.test(line) && !/^jobs:/.test(line)) {
+      inJobs = false;
+      job = null;
+    }
+
+    if (inJobs) {
+      const jobKey = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+      if (jobKey) {
+        job = { name: jobKey[1], guard: "" };
+        continue;
+      }
+      const guard = job && line.match(/^ {4}if:\s*(.*)$/);
+      if (guard) {
+        let value = guard[1].trim();
+        for (let j = i + 1; j < lines.length && /^ {6}\S/.test(lines[j]); j += 1) {
+          value += ` ${lines[j].trim()}`;
+        }
+        job.guard = value;
+      }
+    }
+
+    if (/^permissions:\s*$/.test(line)) {
+      blocks.push({ scope: "top", job: null, guard: "", entries: readEntries(i + 1, 2) });
+    } else if (inJobs && job && /^ {4}permissions:\s*$/.test(line)) {
+      blocks.push({ scope: "job", job: job.name, guard: job.guard, entries: readEntries(i + 1, 6) });
+    }
+  }
+  return blocks;
+}
+
+// A job whose `if:` demands some other event can never run on a pull-request
+// event, so its write scopes are not reachable from proposed code.
+function unreachableFromPullRequest(guard) {
+  return /github\.event_name\s*==\s*'(?!pull_request')[a-z_]+'/.test(guard);
 }
 
 export function validateWorkflowText(path, text) {
@@ -109,6 +216,25 @@ export function validateWorkflowText(path, text) {
   }
   if (/^permissions:\s*["']?write-all["']?\s*$/m.test(text)) {
     failures.push(`Workflow may not use write-all permissions: ${path}`);
+  }
+
+  // `pull_request` runs the proposal's own workflow definition. Any write scope
+  // it can reach hands a write-capable token to proposed code, so granular
+  // grants are refused there just as `write-all` is. Events that always run the
+  // default branch's definition — workflow_run, issue_comment, schedule,
+  // workflow_dispatch — may hold write scopes.
+  if (workflowTriggers(text).has("pull_request")) {
+    for (const block of permissionBlocks(text)) {
+      if (block.scope === "job" && unreachableFromPullRequest(block.guard)) continue;
+      for (const [scope, value] of block.entries) {
+        if (!/^(write|write-all)$/.test(value)) continue;
+        const where = block.scope === "top" ? "top-level" : `job ${block.job}`;
+        failures.push(
+          `Write permission ${scope}: ${value} is reachable from proposed ` +
+            `pull-request code in ${path} (${where})`
+        );
+      }
+    }
   }
   for (const match of text.matchAll(/^\s*-?\s*uses:\s*["']?([^\s"']+)["']?\s*(?:#.*)?$/gm)) {
     const action = match[1];
@@ -124,13 +250,24 @@ export function validateWorkflowText(path, text) {
 export function scanRepository(root) {
   const failures = [];
 
-  for (const path of REQUIRED_FILES) {
-    if (!existsSync(join(root, path))) failures.push(`Missing required repository file: ${path}`);
-  }
-
-  const { files, trustedGuardPathsTracked } = repositoryFiles(root);
+  const { files, tracked, trustedGuardPathsTracked } = repositoryFiles(root);
   for (const path of trustedGuardPathsTracked) {
     failures.push(`The trusted guard checkout path is reserved and may not be tracked: ${path}`);
+  }
+
+  // Presence alone is not enough. A directory, a symlink or an untracked local
+  // file would all satisfy `existsSync`, so a proposal could replace a required
+  // workflow with a directory of the same name and keep the guard quiet while
+  // GitHub stops seeing the workflow at all.
+  for (const path of REQUIRED_FILES) {
+    const stat = lstatSync(join(root, path), { throwIfNoEntry: false });
+    if (!tracked.has(path) || !stat) {
+      failures.push(`Missing required repository file: ${path}`);
+      continue;
+    }
+    if (!stat.isFile()) {
+      failures.push(`Required repository path must be a regular file: ${path}`);
+    }
   }
 
   for (const file of files) {

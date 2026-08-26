@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { validateWorkflowText } from "../scripts/repository-guard.mjs";
+import { permissionBlocks, validateWorkflowText, workflowTriggers } from "../scripts/repository-guard.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const guardScript = join(repositoryRoot, "scripts/repository-guard.mjs");
@@ -166,6 +166,119 @@ test("an immutable workflow_run job judges the head with the default branch's gu
   assert.match(workflow, /RUN_HEAD_SHA" != "\$ASSOCIATED_HEAD_SHA"/);
   assert.match(workflow, /-f name=trusted-repository-guard/);
   assert.match(workflow, /-f head_sha="\$HEAD_SHA"/);
+});
+
+function workflow(lines) {
+  return `${lines.join("\n")}\n`;
+}
+
+test("a required path must be a tracked regular file, not merely present", () => {
+  withFixture((root) => {
+    // A directory of the same name satisfies existsSync while GitHub stops
+    // seeing the workflow at all.
+    rmSync(join(root, ".github/workflows/trusted-repository-guard.yml"));
+    write(root, ".github/workflows/trusted-repository-guard.yml/placeholder.txt");
+    git(root, "add", "-A");
+    const replaced = runGuard(root);
+    assert.equal(replaced.status, 1);
+    assert.match(
+      replaced.stderr,
+      /Missing required repository file: \.github\/workflows\/trusted-repository-guard\.yml/
+    );
+  });
+});
+
+test("a required path present but untracked does not satisfy the guard", () => {
+  withFixture((root) => {
+    git(root, "rm", "--cached", "-q", "AGENTS.md");
+    const result = runGuard(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Missing required repository file: AGENTS\.md/);
+  });
+});
+
+test("granular write permissions are refused on pull-request workflows", () => {
+  const text = workflow([
+    "name: example",
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: write",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    permissions:",
+    "      checks: write",
+    "    steps:",
+    "      - run: true"
+  ]);
+  const failures = validateWorkflowText(".github/workflows/example.yml", text);
+  assert.match(failures.join("\n"), /Write permission contents: write is reachable.*top-level/);
+  assert.match(failures.join("\n"), /Write permission checks: write is reachable.*job build/);
+});
+
+test("write permissions stay allowed where proposed code never runs", () => {
+  const trusted = workflow([
+    "name: example",
+    "on:",
+    "  workflow_run:",
+    "    workflows:",
+    "      - Project CI",
+    "permissions:",
+    "  contents: read",
+    "  checks: write",
+    "jobs:",
+    "  verify:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: true"
+  ]);
+  assert.deepEqual(validateWorkflowText(".github/workflows/example.yml", trusted), []);
+
+  // A job a pull-request event can never reach keeps its write scopes.
+  const gated = workflow([
+    "name: example",
+    "on:",
+    "  pull_request:",
+    "  workflow_dispatch:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  dispatch:",
+    "    if: github.event_name == 'workflow_dispatch'",
+    "    runs-on: ubuntu-latest",
+    "    permissions:",
+    "      checks: write",
+    "    steps:",
+    "      - run: true"
+  ]);
+  assert.deepEqual(validateWorkflowText(".github/workflows/example.yml", gated), []);
+});
+
+test("triggers and permission blocks are read from real workflow shapes", () => {
+  assert.deepEqual([...workflowTriggers("on: push\n")], ["push"]);
+  assert.deepEqual([...workflowTriggers("on: [push, pull_request]\n")], ["push", "pull_request"]);
+  assert.deepEqual(
+    [...workflowTriggers(workflow(["on:", "  pull_request:", "  schedule:", '    - cron: "0 6 * * 1"']))],
+    ["pull_request", "schedule"]
+  );
+
+  const blocks = permissionBlocks(
+    workflow([
+      "permissions:",
+      "  contents: read",
+      "jobs:",
+      "  one:",
+      "    if: github.event_name == 'workflow_dispatch'",
+      "    permissions:",
+      "      checks: write"
+    ])
+  );
+  assert.deepEqual(blocks.map((block) => [block.scope, block.job]), [
+    ["top", null],
+    ["job", "one"]
+  ]);
+  assert.match(blocks[1].guard, /workflow_dispatch/);
 });
 
 test("rejects write-all workflow permissions", () => {
