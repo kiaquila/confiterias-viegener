@@ -39,18 +39,20 @@ function makeFixture() {
   ]) write(root, path);
   cpSync(guardScript, join(root, "scripts/check-repository.mjs"));
 
-  write(root, ".github/workflows/ci.yml", [
-    "name: ci",
-    "on: push",
-    "permissions:",
-    "  contents: read",
-    "jobs:",
-    "  check:",
-    "    runs-on: ubuntu-latest",
-    "    steps:",
-    `      - uses: actions/checkout@${checkoutSha}`,
-    ""
-  ].join("\n"));
+  for (const name of ["ci", "trusted-repository-guard"]) {
+    write(root, `.github/workflows/${name}.yml`, [
+      `name: ${name}`,
+      "on: push",
+      "permissions:",
+      "  contents: read",
+      "jobs:",
+      "  check:",
+      "    runs-on: ubuntu-latest",
+      "    steps:",
+      `      - uses: actions/checkout@${checkoutSha}`,
+      ""
+    ].join("\n"));
+  }
 
   git(root, "init", "-q");
   git(root, "add", "-A");
@@ -163,10 +165,10 @@ test("CI runs the guard from the default branch, not from the proposed copy", ()
     /node \.guard-trusted\/scripts\/check-repository\.mjs --root "\$compat"/
   );
   assert.match(workflow, /git worktree add --detach "\$compat" "\$HEAD_SHA"/);
-  assert.match(workflow, /git -C "\$compat" checkout FETCH_HEAD -- \\\n\s+\.web-design\b/);
+  assert.match(workflow, /git -C "\$compat" checkout "\$default_sha" -- \\\n\s+\.web-design\b/);
   assert.doesNotMatch(
     workflow,
-    /checkout FETCH_HEAD -- \.\s*$/m,
+    /checkout "\$default_sha" -- \.\s*$/m,
     "the compatibility tree must restore a named allowlist, never the whole tree"
   );
   assert.doesNotMatch(

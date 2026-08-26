@@ -17,6 +17,10 @@ const REQUIRED_FILES = [
   ".github/CODEOWNERS",
   ".github/pull_request_template.md",
   ".github/workflows/ci.yml",
+  // The immutable verifier that makes the guard enforceable. Removing it would
+  // leave later pull requests with no trusted check at all, so the trusted
+  // policy refuses a tree that does not carry it.
+  ".github/workflows/trusted-repository-guard.yml",
   "AGENTS.md",
   "CLAUDE.md",
   "README.md",

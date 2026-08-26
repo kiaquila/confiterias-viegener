@@ -69,10 +69,12 @@ jobs:
           # this pull request retires.
           echo "::warning::Cutover: the default branch still carries the retired baseline guard, so it is run against a compatibility tree. This branch disappears once this pull request merges."
           git fetch --no-tags --depth=1 origin "$DEFAULT_BRANCH"
+          # FETCH_HEAD is per-worktree, so resolve it before the worktree exists.
+          default_sha="$(git rev-parse FETCH_HEAD)"
           compat="$RUNNER_TEMP/guard-compat"
           rm -rf "$compat"
           git worktree add --detach "$compat" "$HEAD_SHA"
-          git -C "$compat" checkout FETCH_HEAD -- \
+          git -C "$compat" checkout "$default_sha" -- \
             .web-design \
             .github/workflows/baseline-source-verification.yml \
             .github/workflows/osv-scan.yml \
