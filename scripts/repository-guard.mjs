@@ -125,8 +125,8 @@ function keyOf(content) {
 // unreadable rather than assumed safe.
 const UNSUPPORTED_YAML = [
   [/^\s*<<\s*:/, "merge key"],
-  [/(?:^|\s)&[A-Za-z0-9_-]+\s*$/, "anchor"],
-  [/(?:^|\s)\*[A-Za-z0-9_-]+\s*$/, "alias"],
+  [/(?:^|\s)&[A-Za-z0-9_-]+(?:\s|$)/, "anchor"],
+  [/(?:^|\s)\*[A-Za-z0-9_-]+(?:\s|$)/, "alias"],
   // A double-quoted key decodes escapes, so `"permiss\\u0069ons":` is the
   // permissions key to GitHub but not to any spelling this reader matches.
   // Decoding YAML escapes is out of scope; refusing them is not.
@@ -137,7 +137,9 @@ const UNSUPPORTED_YAML = [
   [/^\?(?:\s|$)/, "explicit mapping key"],
   // A flow-style step hides its keys from a line-oriented reader, so
   // `- { uses: actions/checkout@v4 }` would never be checked for a SHA pin.
-  [/^-\s*\{/, "flow-style sequence item"]
+  // YAML properties may sit between the sequence marker and the mapping, as in
+  // `- &checkout { uses: … }`, so the marker alone does not locate the brace.
+  [/^-\s*(?:[&*!][^\s]*\s+)*\{/, "flow-style sequence item"]
 ];
 
 function lineModel(text) {
@@ -358,6 +360,51 @@ export function workflowActions(text) {
   return actions;
 }
 
+// A workflow's declared `name:`, which is what `workflow_run` keys off and what
+// GitHub shows as the check's workflow.
+export function workflowName(text) {
+  const model = lineModel(text);
+  if (!readable(model)) return null;
+  const index = topLevelKey(model, "name");
+  if (index === -1) return null;
+  const value = keyOf(model[index].content).value;
+  return value ? value.replace(/^["']|["']$/g, "") : null;
+}
+
+// Each job's key and its declared name — the two things a check context can be
+// named after.
+export function workflowJobNames(text) {
+  const model = lineModel(text);
+  if (!readable(model)) return null;
+  const jobsIndex = topLevelKey(model, "jobs");
+  if (jobsIndex === -1) return [];
+  const { childIndent: jobIndent, end: jobsEnd } = childBlock(model, jobsIndex);
+  if (jobIndent === null) return [];
+
+  const names = [];
+  for (let i = jobsIndex + 1; i < jobsEnd; i += 1) {
+    const entry = model[i];
+    if (entry.skip || entry.indent !== jobIndent) continue;
+    const jobKey = keyOf(entry.content);
+    if (!jobKey || jobKey.value) return null;
+    names.push(jobKey.name);
+    const { childIndent: keyIndent, end: jobEnd } = childBlock(model, i);
+    if (keyIndent === null) continue;
+    for (let j = i + 1; j < jobEnd; j += 1) {
+      const inner = model[j];
+      if (inner.skip || inner.indent !== keyIndent) continue;
+      const key = keyOf(inner.content);
+      if (key?.name === "name" && key.value) {
+        names.push(key.value.replace(/^["']|["']$/g, ""));
+      }
+    }
+  }
+  return names;
+}
+
+export const TRUSTED_GUARD_WORKFLOW = ".github/workflows/trusted-repository-guard.yml";
+export const TRUSTED_GUARD_CHECK = "trusted-repository-guard";
+
 export function validateWorkflowText(path, text) {
   const failures = [];
   if (/\bpull_request_target\b/.test(text)) {
@@ -395,6 +442,21 @@ export function validateWorkflowText(path, text) {
       failures.push(
         `Write permission ${scope}: ${value} is reachable from proposed ` +
           `pull-request code in ${path} (${where})`
+      );
+    }
+  }
+
+  // A proposal must not be able to publish the trusted check itself. Renaming
+  // Project CI would stop the trusted verifier's workflow_run from firing, and
+  // a proposed job carrying the trusted name would then be the only success
+  // reported under a required check that never actually ran.
+  if (path !== TRUSTED_GUARD_WORKFLOW) {
+    const jobNames = workflowJobNames(text);
+    if (jobNames === null) {
+      failures.push(`Workflow jobs could not be read in ${path}`);
+    } else if (jobNames.includes(TRUSTED_GUARD_CHECK)) {
+      failures.push(
+        `Only ${TRUSTED_GUARD_WORKFLOW} may publish the ${TRUSTED_GUARD_CHECK} check: ${path}`
       );
     }
   }
@@ -489,6 +551,21 @@ export function scanRepository(root, { maxScanBytes = MAX_SCAN_BYTES } = {}) {
 
     if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(normalized)) {
       failures.push(...validateWorkflowText(normalized, text));
+    }
+  }
+
+  const REQUIRED_WORKFLOW_NAMES = [
+    [".github/workflows/ci.yml", "Project CI"],
+    [TRUSTED_GUARD_WORKFLOW, "Trusted Repository Guard"]
+  ];
+  for (const [path, expected] of REQUIRED_WORKFLOW_NAMES) {
+    if (!tracked.has(path)) continue; // already reported as missing
+    const name = workflowName(readFileSync(join(root, path), "utf8"));
+    if (name !== expected) {
+      failures.push(
+        `${path} must stay named ${JSON.stringify(expected)}; ` +
+          `the trusted verifier is bound to that name, and it declares ${JSON.stringify(name)}`
+      );
     }
   }
 

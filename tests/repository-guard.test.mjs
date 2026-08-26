@@ -47,8 +47,11 @@ function makeFixture() {
   ]) write(root, path);
   cpSync(guardScript, join(root, "scripts/repository-guard.mjs"));
 
-  for (const name of ["ci", "trusted-repository-guard"]) {
-    write(root, `.github/workflows/${name}.yml`, [
+  for (const [file, name] of [
+    ["ci", "Project CI"],
+    ["trusted-repository-guard", "Trusted Repository Guard"]
+  ]) {
+    write(root, `.github/workflows/${file}.yml`, [
       `name: ${name}`,
       "on: push",
       "permissions:",
@@ -617,6 +620,61 @@ test("a job field the reader cannot name is refused, not skipped", () => {
   assert.match(failures.join("\n"), /permissions could not be read/);
 });
 
+test("the trusted check name and the workflow it keys off are reserved", () => {
+  withFixture((root) => {
+    // Renaming Project CI would stop the trusted verifier's workflow_run from
+    // ever firing.
+    const path = join(root, ".github/workflows/ci.yml");
+    writeFileSync(path, readFileSync(path, "utf8").replace("name: Project CI", "name: Renamed CI"));
+    git(root, "add", "-A");
+    const result = runGuard(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /must stay named "Project CI"/);
+  });
+
+  // And a proposed job may not carry the trusted check's name, whether as its
+  // key or as its display name.
+  for (const job of ["  trusted-repository-guard:", "  spoof:\n    name: trusted-repository-guard"]) {
+    const failures = validateWorkflowText(
+      ".github/workflows/ci.yml",
+      workflow([
+        "name: Project CI",
+        "on:",
+        "  pull_request:",
+        "permissions:",
+        "  contents: read",
+        "jobs:",
+        job,
+        "    runs-on: ubuntu-latest",
+        "    steps:",
+        "      - run: true"
+      ])
+    );
+    assert.match(failures.join("\n"), /Only .* may publish the trusted-repository-guard check/, job);
+  }
+
+  // The verifier itself is of course allowed to publish it.
+  assert.deepEqual(
+    validateWorkflowText(
+      ".github/workflows/trusted-repository-guard.yml",
+      workflow([
+        "name: Trusted Repository Guard",
+        "on:",
+        "  workflow_run:",
+        "permissions:",
+        "  contents: read",
+        "jobs:",
+        "  verify:",
+        "    name: trusted-repository-guard",
+        "    runs-on: ubuntu-latest",
+        "    steps:",
+        "      - run: true"
+      ])
+    ),
+    []
+  );
+});
+
 test("a flow-style step is refused rather than left unchecked", () => {
   const flow = workflow([
     "on:",
@@ -631,6 +689,23 @@ test("a flow-style step is refused rather than left unchecked", () => {
   ]);
   assert.match(
     validateWorkflowText(".github/workflows/example.yml", flow).join("\n"),
+    /permissions could not be read/
+  );
+
+  // A YAML property between the marker and the brace does not hide it.
+  const anchored = workflow([
+    "on:",
+    "  push:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - &checkout { uses: actions/checkout@v4 }"
+  ]);
+  assert.match(
+    validateWorkflowText(".github/workflows/example.yml", anchored).join("\n"),
     /permissions could not be read/
   );
 });
