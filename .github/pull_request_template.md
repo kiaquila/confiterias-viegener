@@ -15,9 +15,8 @@
 
 - [ ] The PR contains no unrelated customer data or assets.
 - [ ] No secrets, `.env`, personal paths, generated builds, dependencies, or local state are tracked.
-- [ ] `npm run preflight`
-- [ ] Project checks from `.web-design/project.json`
-- [ ] `Codex Review` is green for the current head.
+- [ ] `npm ci --prefix website && npm --prefix website run check`
+- [ ] The smallest and largest supported layouts were checked, not just desktop.
 
 ## Validation evidence
 
