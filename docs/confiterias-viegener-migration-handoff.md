@@ -58,20 +58,18 @@ unresolved provenance and rights risk. If final closeout requires a confirmed
 third-party licence, the assets must be replaced or their rights documented
 first.
 
-## Baseline
+## Baseline (removed)
 
-| Field | Audited value |
-| --- | --- |
-| Source | `kiaquila/web-design` |
-| Version | `0.1.0-dev` |
-| Commit | `f042879d8b6d11cc80021bb19cc4aacd645cc621` |
-| Profile | `static-cloudflare` |
+The migration adopted the `kiaquila/web-design` baseline at version `0.1.0-dev`,
+commit `f042879d8b6d11cc80021bb19cc4aacd645cc621`, profile `static-cloudflare`.
+That pin was provisional: an earlier commit on the unmerged `web-design` PR #46
+rather than a published release, carrying a standing obligation to repin onto a
+stable release once one existed.
 
-The full commit SHA identifies immutable bytes, but it is an earlier commit in
-the history of the open, unmerged `web-design` PR #46 rather than its current
-head, and it has no published stable release identity. A separate baseline-only
-pull request must replace it with the full SHA of the first stable release. That
-pull request may change only the lock and managed bytes moved by the release.
+**That baseline has since been removed from this repository in full**, together
+with the scripts, workflows, managed-file set and generic operations documents
+that came with it. See "Control plane removal" at the end of this document. The
+repin obligation is void: there is nothing left here to repin.
 
 ## GitHub governance
 
@@ -90,8 +88,8 @@ Until it is applied, maintainers enforce these controls manually:
 1. Make every future change on a focused branch and ready-for-review pull
    request; do not push directly to `main`.
 2. Review the exact current head and the Code Owner paths before merge.
-3. Require the check names in `.web-design/project.json`, including a
-   current-head Codex review, to be successful.
+3. Require the local check to be successful on the exact head:
+   `npm ci --prefix website && npm --prefix website run check`.
 4. Record two unchanged-head green snapshots at least 120 seconds apart before
    merge.
 5. Do not force-push or delete `main`, and resolve conversations before merge.
@@ -243,9 +241,11 @@ does not chase it.
 
 ## Remaining closeout blockers
 
-- Obtain green current-head checks. The blocker was the exhausted private-repo
-  Actions allowance, not the workflows: the repository is public again and its
-  runs execute normally, so this is now an ordinary rerun-and-verify step.
+- Decide whether this repository wants continuous integration at all. The
+  control-plane removal deleted every workflow, so GitHub Actions now runs
+  nothing here and the local check is the only gate. That is a deliberate
+  clean slate, not an oversight; adding a small workflow that builds `website/`
+  and runs its tests is a separate, optional decision.
 - Cloudflare build token, split into its two halves because only one is done.
   **Narrowing: done** — the active Builds token was narrowed in place to
   Account Workers Scripts: Edit, Account Settings: Read, User Memberships:
@@ -256,7 +256,8 @@ does not chase it.
   `confiterias-viegener build token v2` is not bound to Builds and is queued
   for deletion pending the owner's confirmation; deleting it rotates nothing.
 - Apply branch protection to `main` now that the repository is public and the
-  feature is available, using the check names in `.web-design/project.json`.
+  feature is available. It can require review without requiring any check,
+  since no workflow currently publishes one.
 - Decide the final visibility. Public is the accepted migration-time state, not
   a permanent one; returning to private means accepting that Actions stop once
   the included allowance is spent, so that decision and its consequence belong
@@ -270,7 +271,30 @@ does not chase it.
   root `/website`, branch `main`, with the duplicate-source verification and
   its evidence recorded in the Cloudflare section above; the dashboard is
   authoritative for whatever is current.
-- Publish an immutable stable `web-design` release, then repin through a
-  baseline-only pull request.
 - Resolve or explicitly retain the documented prototype and asset provenance
   limitations; do not claim a licence that has not been established.
+
+## Control plane removal
+
+On 2026-08-27 the `kiaquila/web-design` control plane was removed from this
+repository rather than repinned. It never governed anything here: its lock
+pointed at a commit with no published release behind it, and keeping it meant
+carrying a permanent obligation to a template this single-page site does not
+use.
+
+Removed: `.web-design/**`; `scripts/**` and `tests/**` in full; every GitHub
+Actions workflow; `.github/CODEOWNERS` and `.github/dependabot.yml`; the root
+`package.json`, whose every script drove that machinery; and the generic
+operations and standards documents. `docs/operations/cloudflare.md` was kept
+because it describes the deployment model this project actually uses.
+
+Nothing under `website/` was changed. The product tree does not reference
+anything outside itself, which is what made the removal a pure deletion, and
+`npm --prefix website run check` passed all 36 tests afterwards with the built
+output unchanged.
+
+The four commands Cloudflare Workers Builds invokes — `npm run build`,
+`npm run stage:deploy`, `npm run stage:preview`, and the `wrangler` dependency
+they need — were deliberately kept in `website/package.json`, along with
+`wrangler.json` and `worker/index.ts`. Production builds from this repository on
+every push to `main`; removing any of them would have broken that deploy.

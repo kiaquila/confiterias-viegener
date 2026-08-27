@@ -137,49 +137,6 @@ The standalone-repository migration, local and production verification,
 governance exceptions, and unresolved deployment evidence are recorded in
 [`docs/confiterias-viegener-migration-handoff.md`](./docs/confiterias-viegener-migration-handoff.md).
 
-## Repository baseline
-
-Shared standards, the guard, CI, the review and OSV workflows and the update
-flow come from the `kiaquila/web-design` baseline and are listed in
-[`.web-design/managed-files.json`](./.web-design/managed-files.json). Everything
-else — this README, `AGENTS.md`, `website/`, `wrangler.json` and the deploy
-settings — is owned by this project.
-
-| Field | Value |
-| --- | --- |
-| Source | `kiaquila/web-design` |
-| Pinned commit | `f042879d8b6d11cc80021bb19cc4aacd645cc621` |
-| Version | `0.1.0-dev` |
-| Profile | `static-cloudflare` |
-
-Do not edit a managed file here. Changes to those come from the baseline through
-`npm run sync:web-design` in a reviewed update pull request.
-
-### Required follow-up: pin an immutable release
-
-**The pinned commit above is provisional.** `0.1.0-dev` is not a published
-release, and `f042879…` is an earlier commit in the history of the unmerged
-`kiaquila/web-design` branch `codex/web-design-template-v2` (PR #46), not the
-current branch head. It was used because no stable release existed when this
-repository was created.
-
-The full SHA pins immutable content, so movement of the branch does not change
-the bytes being verified. The weakness is release governance: the commit has no
-published stable release identity, and deleting or rebasing its only branch may
-make it harder to retrieve. Replace it with the full SHA of the first published
-stable release.
-
-Once PR #46 is merged and the first immutable `web-design` release is published,
-sync this project onto that release's full 40-character SHA in its own pull
-request:
-
-```bash
-npm run sync:web-design
-```
-
-That pull request must change nothing but `.web-design/lock.json` and any
-managed bytes the release actually moves.
-
 ## Checks
 
 ```bash
@@ -188,12 +145,8 @@ npm --prefix website run check
 ```
 
 That builds into `dist/` and runs the test suite against the built output.
-`dist/` is generated and is not committed. Also run the repository guard and the
-baseline checks from the root:
-
-```bash
-npm run preflight
-```
+`dist/` is generated and is not committed. There is no second, repository-level
+check to run: `website/` is the whole project.
 
 Regenerating the photography derivatives is a local step and needs ImageMagick.
 It is not part of `check`, because the derivatives are committed:
