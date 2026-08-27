@@ -13,7 +13,9 @@ import {
   reachableFromPullRequest,
   unreachableFromPullRequest,
   validateTrustedVerifier,
+  validateTrustedVerifierBytes,
   validateWorkflowText,
+  workflowRunUpstreams,
   workflowTriggers
 } from "../scripts/repository-guard.mjs";
 
@@ -760,6 +762,103 @@ test("the trusted verifier's body is required, not just its name", () => {
     validateWorkflowText(".github/workflows/trusted-repository-guard.yml", real),
     []
   );
+});
+
+test("the verifier is held by its bytes, not by a description of its body", () => {
+  // Every requirement above describes what the verifier's body must contain,
+  // and a description can be satisfied by a body that does the opposite: the
+  // fragments all survive `conclusion=success` being assigned again after the
+  // guard has rejected the head, or the guard-result test being inverted. What
+  // decides those is the file, so the file is what the policy pins.
+  const real = readFileSync(
+    join(repositoryRoot, ".github/workflows/trusted-repository-guard.yml")
+  );
+  assert.deepEqual(validateTrustedVerifierBytes(real), []);
+
+  const text = real.toString("utf8");
+  const negated = [
+    // The guard's verdict discarded: the rejection is recorded and then undone.
+    text.replace(
+      'summary="The default branch\'s repository guard rejected this pull-request head."',
+      'summary="The default branch\'s repository guard rejected this pull-request head."\n' +
+        "              conclusion=success"
+    ),
+    // The guard-result test inverted, so only a passing head is failed.
+    text.replace('if [ "$?" -ne 0 ]; then', 'if [ "$?" -eq 0 ]; then'),
+    // The upstream filter pointed at a workflow that does not exist, so the
+    // verifier never fires at all.
+    text.replace("      - Project CI\n", "      - Renamed CI\n")
+  ];
+  for (const rewrite of negated) {
+    assert.notEqual(rewrite, text);
+    // The substring requirements are all still satisfied — that is the point.
+    assert.deepEqual(
+      validateTrustedVerifier(rewrite).filter((entry) => !entry.startsWith("fire on")),
+      []
+    );
+    assert.match(
+      validateTrustedVerifierBytes(Buffer.from(rewrite, "utf8")).join("\n"),
+      /is not a copy the trusted policy accepts \(sha256 [a-f0-9]{64}\)/
+    );
+  }
+
+  // A single byte is enough, comment or not.
+  assert.equal(validateTrustedVerifierBytes(Buffer.concat([real, Buffer.from("\n")])).length, 1);
+});
+
+test("a rewritten verifier is rejected by the guard itself", () => {
+  withFixture((root) => {
+    const verifier = join(root, ".github/workflows/trusted-repository-guard.yml");
+    writeFileSync(
+      verifier,
+      readFileSync(verifier, "utf8").replace('if [ "$?" -ne 0 ]; then', 'if [ "$?" -eq 0 ]; then')
+    );
+    git(root, "add", "-A");
+    const result = runGuard(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /is not a copy the trusted policy accepts/);
+  });
+});
+
+test("the verifier's upstream workflow is named, not merely triggered on", () => {
+  // `workflow_run` selects its upstream by name. A verifier pointed at a
+  // workflow that does not exist keeps the trigger and never runs.
+  const renamed = readFileSync(
+    join(repositoryRoot, ".github/workflows/trusted-repository-guard.yml"),
+    "utf8"
+  ).replace("      - Project CI\n", "      - Renamed CI\n");
+  assert.deepEqual(workflowRunUpstreams(renamed), ["Renamed CI"]);
+  assert.match(
+    validateTrustedVerifier(renamed).join("\n"),
+    /fire on completions of "Project CI" and no other workflow/
+  );
+
+  // Two upstreams are not one upstream either.
+  const widened = readFileSync(
+    join(repositoryRoot, ".github/workflows/trusted-repository-guard.yml"),
+    "utf8"
+  ).replace("      - Project CI\n", "      - Project CI\n      - Anything Else\n");
+  assert.deepEqual(workflowRunUpstreams(widened), ["Project CI", "Anything Else"]);
+  assert.equal(validateTrustedVerifier(widened).length, 1);
+
+  // Flow and quoted spellings read the same as the block sequence.
+  const flow = workflow([
+    "name: Trusted Repository Guard",
+    "on:",
+    "  workflow_run:",
+    "    workflows: ['Project CI']",
+    "    types: [completed]"
+  ]);
+  assert.deepEqual(workflowRunUpstreams(flow), ["Project CI"]);
+
+  // Shapes the reader cannot classify are unreadable, never empty: a missing
+  // filter, an item it cannot name, an `on:` written inline.
+  for (const unreadable of [
+    workflow(["on:", "  workflow_run:", "    types:", "      - completed"]),
+    workflow(["on:", "  workflow_run:", "    workflows:", "      Project CI"]),
+    workflow(["on: workflow_run"]),
+    workflow(["on:", "  push:", "    branches: [main]"])
+  ]) assert.equal(workflowRunUpstreams(unreadable), null);
 });
 
 test("an escaped job name cannot smuggle in the trusted check name", () => {

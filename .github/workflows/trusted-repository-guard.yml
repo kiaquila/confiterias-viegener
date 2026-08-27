@@ -7,6 +7,13 @@ name: Trusted Repository Guard
 # the proposal contains, and publishes the result as a check bound to the exact
 # pull-request head SHA.
 #
+# The default branch's policy holds this file by its exact bytes, not by a
+# description of what its body should contain: `TRUSTED_VERIFIER_DIGESTS` in
+# `scripts/repository-guard.mjs` lists the digests it accepts. Changing this
+# file therefore takes two pull requests, the digest first — the guard that
+# judges a proposal is the default branch's copy, so a proposal cannot bring
+# the digest for its own rewrite with it.
+#
 # One residual is not closable here, and is recorded rather than papered over.
 # `workflow_run` selects the upstream workflow by name, so a proposal that
 # renames Project CI stops this job from firing at all, and could then publish

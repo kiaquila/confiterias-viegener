@@ -7,6 +7,7 @@
 // nothing about releases, locks, manifests or an upstream baseline, and there is
 // no automatic upstream that can rewrite it.
 
+import { createHash } from "node:crypto";
 import { lstatSync, readFileSync } from "node:fs";
 import { basename, join, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -409,6 +410,84 @@ export function workflowJobNames(text) {
 
 export const TRUSTED_GUARD_WORKFLOW = ".github/workflows/trusted-repository-guard.yml";
 export const TRUSTED_GUARD_CHECK = "trusted-repository-guard";
+export const PROJECT_CI_WORKFLOW = ".github/workflows/ci.yml";
+export const PROJECT_CI_NAME = "Project CI";
+
+// The exact bytes of the trusted verifier this policy accepts.
+//
+// Describing what the verifier's body must contain is always one description
+// short. A required fragment can be present and still be negated by the line
+// beside it: `conclusion=success` assigned again before the outputs are
+// written, the guard-result test turned from `-ne 0` into `-eq 0`, the upstream
+// filter pointed at a workflow that does not exist. Nothing but the file itself
+// decides those, so the file itself is what this policy holds.
+//
+// The copy of this guard that judges a proposal is the default branch's, so a
+// proposal cannot supply the digest for its own rewrite. Changing the verifier
+// is therefore two pull requests, in this order:
+//
+//   1. add the new digest beside the current one — the verifier is untouched,
+//      so the default branch's policy still recognises the tree;
+//   2. land the verifier rewrite, which the default branch now recognises, and
+//      drop the retired digest in the same change.
+const TRUSTED_VERIFIER_DIGESTS = new Set([
+  "5789be5f2edd270757489e11f0353a78f18d97be612f19f61fa30881457fc814"
+]);
+
+// `workflow_run` selects its upstream by name, so the trigger being present
+// proves nothing on its own: pointed at a workflow that does not exist, the
+// verifier never fires, and every later proposal keeps a required context that
+// was never judged. Returns the names listed, or `null` when the section is
+// written in a form this reader does not handle.
+export function workflowRunUpstreams(text) {
+  const model = lineModel(text);
+  if (!readable(model)) return null;
+
+  const onIndex = topLevelKey(model, "on");
+  if (onIndex === -1 || keyOf(model[onIndex].content).value) return null;
+  const { childIndent: triggerIndent, end: onEnd } = childBlock(model, onIndex);
+  if (triggerIndent === null) return null;
+
+  const unquote = (value) => value.trim().replace(/^["']|["']$/g, "");
+
+  for (let i = onIndex + 1; i < onEnd; i += 1) {
+    const entry = model[i];
+    if (entry.skip || entry.indent !== triggerIndent) continue;
+    if (keyOf(entry.content)?.name !== "workflow_run") continue;
+
+    const { childIndent: optionIndent, end: triggerEnd } = childBlock(model, i);
+    if (optionIndent === null) return null;
+    for (let j = i + 1; j < triggerEnd; j += 1) {
+      const option = model[j];
+      if (option.skip || option.indent !== optionIndent) continue;
+      if (keyOf(option.content)?.name !== "workflows") continue;
+
+      const inline = keyOf(option.content).value;
+      if (inline) {
+        const sequence = inline.match(/^\[\s*(.*?)\s*\]$/);
+        if (!sequence) return null;
+        return sequence[1] === "" ? [] : sequence[1].split(",").map(unquote);
+      }
+
+      const { childIndent: itemIndent, end: optionEnd } = childBlock(model, j);
+      if (itemIndent === null) return null;
+      const names = [];
+      for (let k = j + 1; k < optionEnd; k += 1) {
+        const item = model[k];
+        if (item.skip) continue;
+        if (item.indent !== itemIndent) return null;
+        const value = strip(item.content).match(/^-[ ]+(.+)$/);
+        if (!value) return null;
+        names.push(unquote(value[1]));
+      }
+      return names;
+    }
+    // `workflows:` is not optional on a `workflow_run` trigger, so a trigger
+    // without one is a shape this reader will not guess at.
+    return null;
+  }
+  return null;
+}
 
 // What the trusted verifier has to actually do. Reserving its name and its
 // trigger is not enough: without this, a proposal could replace its body with
@@ -447,7 +526,23 @@ export function validateTrustedVerifier(text) {
   if (!triggers || !triggers.has("workflow_run")) {
     missing.push("run only from a workflow_run completion");
   }
+  const upstreams = workflowRunUpstreams(text);
+  if (!upstreams || upstreams.length !== 1 || upstreams[0] !== PROJECT_CI_NAME) {
+    missing.push(`fire on completions of ${JSON.stringify(PROJECT_CI_NAME)} and no other workflow`);
+  }
   return missing;
+}
+
+// The bytes the trusted policy accepts for the verifier. This is the check the
+// requirements above cannot be: they describe the body, and a description can
+// be satisfied by a body that does the opposite.
+export function validateTrustedVerifierBytes(bytes) {
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  if (TRUSTED_VERIFIER_DIGESTS.has(digest)) return [];
+  return [
+    `${TRUSTED_GUARD_WORKFLOW} is not a copy the trusted policy accepts ` +
+      `(sha256 ${digest}); a verifier change lands in two steps, its digest first`
+  ];
 }
 
 export function validateWorkflowText(path, text) {
@@ -615,7 +710,7 @@ export function scanRepository(root, { maxScanBytes = MAX_SCAN_BYTES } = {}) {
   }
 
   const REQUIRED_WORKFLOW_NAMES = [
-    [".github/workflows/ci.yml", "Project CI"],
+    [PROJECT_CI_WORKFLOW, PROJECT_CI_NAME],
     [TRUSTED_GUARD_WORKFLOW, "Trusted Repository Guard"]
   ];
   for (const [path, expected] of REQUIRED_WORKFLOW_NAMES) {
@@ -626,6 +721,14 @@ export function scanRepository(root, { maxScanBytes = MAX_SCAN_BYTES } = {}) {
         `${path} must stay named ${JSON.stringify(expected)}; ` +
           `the trusted verifier is bound to that name, and it declares ${JSON.stringify(name)}`
       );
+    }
+  }
+
+  // The verifier is judged by its bytes, not only by what its body reads like.
+  if (tracked.has(TRUSTED_GUARD_WORKFLOW)) {
+    const verifier = join(root, TRUSTED_GUARD_WORKFLOW);
+    if (lstatSync(verifier, { throwIfNoEntry: false })?.isFile()) {
+      failures.push(...validateTrustedVerifierBytes(readFileSync(verifier)));
     }
   }
 
