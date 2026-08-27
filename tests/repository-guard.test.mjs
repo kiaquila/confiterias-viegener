@@ -15,6 +15,7 @@ import {
   validateTrustedVerifier,
   validateTrustedVerifierBytes,
   validateWorkflowText,
+  workflowName,
   workflowRunUpstreams,
   workflowTriggers
 } from "../scripts/repository-guard.mjs";
@@ -859,6 +860,57 @@ test("the verifier's upstream workflow is named, not merely triggered on", () =>
     workflow(["on: workflow_run"]),
     workflow(["on:", "  push:", "    branches: [main]"])
   ]) assert.equal(workflowRunUpstreams(unreadable), null);
+});
+
+test("an expression is never recorded as a name", () => {
+  // GitHub evaluates a name before it becomes a check context, so the text in
+  // the file is not the name. `${{ 'trusted-repository-guard' }}` resolves to
+  // the reserved context while spelling nothing like it.
+  const expressed = workflow([
+    "name: Project CI",
+    "on:",
+    "  pull_request:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  build:",
+    "    name: ${{ 'trusted-repository-guard' }}",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: echo hello"
+  ]);
+  assert.equal(workflowJobNames(expressed), null);
+  assert.match(
+    validateWorkflowText(".github/workflows/ci.yml", expressed).join("\n"),
+    /Workflow jobs could not be read/
+  );
+
+  // A workflow name is evaluated the same way, and the required workflows are
+  // matched against a literal, so an expression there is not that literal.
+  assert.equal(workflowName(workflow(["name: ${{ 'Project CI' }}", "on: push"])), null);
+});
+
+test("a flow mapping is refused wherever it opens", () => {
+  // The sequence marker and the flow mapping may sit on separate lines, so the
+  // brace is not on the marker's line and the step's keys are on neither.
+  const split = workflow([
+    "name: Project CI",
+    "on:",
+    "  push:",
+    "permissions:",
+    "  contents: read",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      -",
+    "        { uses: actions/checkout@v4 }"
+  ]);
+  assert.equal(workflowJobNames(split), null);
+  assert.equal(permissionBlocks(split)[0].entries, null);
+  const failures = validateWorkflowText(".github/workflows/ci.yml", split);
+  assert.match(failures.join("\n"), /Workflow permissions could not be read/);
+  assert.match(failures.join("\n"), /Workflow jobs could not be read/);
 });
 
 test("an escaped job name cannot smuggle in the trusted check name", () => {

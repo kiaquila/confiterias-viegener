@@ -14,6 +14,12 @@ name: Trusted Repository Guard
 # judges a proposal is the default branch's copy, so a proposal cannot bring
 # the digest for its own rewrite with it.
 #
+# The guard script itself is the other half of that. It is not byte-pinned —
+# a file cannot carry its own digest — so instead the default branch's test
+# suite is copied over the proposal's and run against the proposal's guard. A
+# guard replaced by a no-op fails those expectations no matter what the
+# proposal's own tests were rewritten to assert.
+#
 # One residual is not closable here, and is recorded rather than papered over.
 # `workflow_run` selects the upstream workflow by name, so a proposal that
 # renames Project CI stops this job from firing at all, and could then publish
@@ -91,6 +97,22 @@ jobs:
             if [ "$?" -ne 0 ]; then
               conclusion=failure
               summary="The default branch's repository guard rejected this pull-request head."
+            else
+              # The proposed tree carries its own copy of the guard, and after a
+              # merge that copy is what judges every later pull request. So the
+              # default branch's expectations are copied over the proposed ones
+              # and run against the proposed implementation: a guard replaced by
+              # a no-op fails them, whatever its own tests were changed to say.
+              # This happens after the scan above, so the tree the guard read is
+              # the proposal's own, not one this step has written into.
+              mkdir -p "$GITHUB_WORKSPACE/.guard-proposed/tests"
+              cp "$GITHUB_WORKSPACE/tests/repository-guard.test.mjs" \
+                "$GITHUB_WORKSPACE/.guard-proposed/tests/repository-guard.test.mjs"
+              node --test "$GITHUB_WORKSPACE/.guard-proposed/tests/repository-guard.test.mjs"
+              if [ "$?" -ne 0 ]; then
+                conclusion=failure
+                summary="The proposed head's guard fails the default branch's tests."
+              fi
             fi
           fi
           echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"

@@ -143,7 +143,12 @@ const UNSUPPORTED_YAML = [
   // `- { uses: actions/checkout@v4 }` would never be checked for a SHA pin.
   // YAML properties may sit between the sequence marker and the mapping, as in
   // `- &checkout { uses: … }`, so the marker alone does not locate the brace.
-  [/^-\s*(?:[&*!][^\s]*\s+)*\{/, "flow-style sequence item"]
+  [/^-\s*(?:[&*!][^\s]*\s+)*\{/, "flow-style sequence item"],
+  // The mapping may also start on the line after the marker, so the brace is
+  // not on the marker's line at all. Both halves of that spelling are refused:
+  // a marker standing alone, and a flow mapping opening any line.
+  [/^-$/, "sequence marker without its item"],
+  [/^(?:[&*!][^\s]*\s+)*\{/, "flow mapping on its own line"]
 ];
 
 function lineModel(text) {
@@ -364,6 +369,10 @@ export function workflowActions(text) {
   return actions;
 }
 
+// A name GitHub evaluates before it becomes a check context, so the text in the
+// file is not the name. Such a value is never recorded as one.
+const EXPRESSION = /\$\{\{/;
+
 // A workflow's declared `name:`, which is what `workflow_run` keys off and what
 // GitHub shows as the check's workflow.
 export function workflowName(text) {
@@ -372,7 +381,8 @@ export function workflowName(text) {
   const index = topLevelKey(model, "name");
   if (index === -1) return null;
   const value = keyOf(model[index].content).value;
-  return value ? value.replace(/^["']|["']$/g, "") : null;
+  if (!value || EXPRESSION.test(value)) return null;
+  return value.replace(/^["']|["']$/g, "");
 }
 
 // Each job's key and its declared name — the two things a check context can be
@@ -400,8 +410,10 @@ export function workflowJobNames(text) {
       const key = keyOf(inner.content);
       if (key?.name !== "name") continue;
       // A block scalar keeps the text on following lines, so the value here
-      // would be the marker rather than the name. Refuse rather than record it.
-      if (!key.value || /^[|>]/.test(key.value)) return null;
+      // would be the marker rather than the name. An expression is not the name
+      // either — GitHub evaluates it, and `${{ 'trusted-repository-guard' }}`
+      // becomes the reserved check context. Refuse rather than record either.
+      if (!key.value || /^[|>]/.test(key.value) || EXPRESSION.test(key.value)) return null;
       names.push(key.value.replace(/^["']|["']$/g, ""));
     }
   }
@@ -431,7 +443,7 @@ export const PROJECT_CI_NAME = "Project CI";
 //   2. land the verifier rewrite, which the default branch now recognises, and
 //      drop the retired digest in the same change.
 const TRUSTED_VERIFIER_DIGESTS = new Set([
-  "5789be5f2edd270757489e11f0353a78f18d97be612f19f61fa30881457fc814"
+  "42adff4a945700a00185f555f614271d946c5ba0ff66825d6fbbc8f8c45da9d7"
 ]);
 
 // `workflow_run` selects its upstream by name, so the trigger being present
@@ -502,6 +514,8 @@ const TRUSTED_VERIFIER_REQUIREMENTS = [
   [/path:\s*\.guard-proposed/, "check that head out into .guard-proposed"],
   [/scripts\/repository-guard\.mjs[\s\S]{0,200}--root "\$GITHUB_WORKSPACE\/\.guard-proposed"/,
     "run the default branch's guard against that checkout"],
+  [/cp "\$GITHUB_WORKSPACE\/tests\/repository-guard\.test\.mjs"[\s\S]{0,200}node --test "\$GITHUB_WORKSPACE\/\.guard-proposed\/tests\/repository-guard\.test\.mjs"/,
+    "hold the proposed guard to the default branch's tests"],
   [/-z "\$ASSOCIATED_HEAD_SHA"/, "fail when the run has no pull-request association"],
   [/-n "\$SECOND_ASSOCIATION"/, "fail when the run is associated with more than one"],
   [/"\$RUN_HEAD_SHA" != "\$ASSOCIATED_HEAD_SHA"/,

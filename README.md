@@ -180,6 +180,32 @@ npm run sync:web-design
 That pull request must change nothing but `.web-design/lock.json` and any
 managed bytes the release actually moves.
 
+### Required follow-up: own the project guard in CODEOWNERS
+
+`.github/CODEOWNERS` covers `/.github/workflows/` and the managed
+`scripts/check-repository.mjs`, but not the project-owned
+`scripts/repository-guard.mjs` or `tests/repository-guard.test.mjs`. A pull
+request can therefore change the policy that judges pull requests without
+touching a code-owned path.
+
+It cannot be fixed here: `.github/CODEOWNERS` is a **managed baseline file**, so
+editing it in this repository fails `check-managed-files` and
+`baseline-source-verification`. Add these two entries in the change that
+resolves the managed baseline — either the sync onto the first published release
+above, or the pull request that retires the control plane:
+
+```
+/scripts/repository-guard.mjs @kiaquila
+/tests/repository-guard.test.mjs @kiaquila
+```
+
+Until then the attack path itself is closed by the trusted verifier rather than
+left open: it copies the default branch's `tests/repository-guard.test.mjs` over
+the proposed tree's and runs it against the proposed guard, so a guard weakened
+to a no-op fails the default branch's expectations whatever its own tests were
+rewritten to say. Code Owner review is the belt to that pair of braces, not the
+only thing holding them.
+
 ## Checks
 
 ```bash
